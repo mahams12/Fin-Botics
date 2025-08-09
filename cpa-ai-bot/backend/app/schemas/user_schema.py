@@ -59,8 +59,8 @@ class UserSearchRequest(BaseModel):
     limit: int = Field(20, ge=1, le=100)
 
 class UserPreferencesRequest(BaseModel):
-    theme: Optional[str] = Field(None, regex="^(light|dark|auto)$")
-    currency: Optional[str] = Field(None, regex="^[A-Z]{3}$")
+    theme: Optional[str] = Field(None, pattern="^(light|dark|auto)$")
+    currency: Optional[str] = Field(None, pattern="^[A-Z]{3}$")
     date_format: Optional[str] = None
     timezone: Optional[str] = None
     notifications: Optional[Dict[str, bool]] = None
@@ -92,7 +92,7 @@ class AdminUserUpdateRequest(BaseModel):
     email_verified: Optional[bool] = None
 
 class UserExportRequest(BaseModel):
-    format: str = Field(..., regex="^(json|csv)$")
+    format: str = Field(..., pattern="^(json|csv)$")
     include_expenses: bool = True
     include_chats: bool = False
     date_range: Optional[Dict[str, str]] = None

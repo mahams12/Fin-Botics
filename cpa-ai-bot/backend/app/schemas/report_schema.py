@@ -119,7 +119,7 @@ class ReportExportRequest(BaseModel):
 class ScheduledReportRequest(BaseModel):
     name: str
     report_type: ReportTypeEnum
-    frequency: str = Field(..., regex="^(daily|weekly|monthly|quarterly|annually)$")
+    frequency: str = Field(..., pattern="^(daily|weekly|monthly|quarterly|annually)$")
     email_recipients: List[str] = []
     include_tax_estimation: bool = False
     include_category_breakdown: bool = True
@@ -140,7 +140,7 @@ class ScheduledReportResponse(BaseModel):
 
 class ScheduledReportUpdateRequest(BaseModel):
     name: Optional[str] = None
-    frequency: Optional[str] = Field(None, regex="^(daily|weekly|monthly|quarterly|annually)$")
+    frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|annually)$")
     email_recipients: Optional[List[str]] = None
     is_active: Optional[bool] = None
     custom_config: Optional[Dict[str, Any]] = None
@@ -173,7 +173,7 @@ class ComparisonReportRequest(BaseModel):
     current_end_date: date
     comparison_start_date: date
     comparison_end_date: date
-    comparison_type: str = Field(..., regex="^(period|year_over_year|month_over_month)$")
+    comparison_type: str = Field(..., pattern="^(period|year_over_year|month_over_month)$")
 
 class ComparisonReportResponse(BaseModel):
     current_period: ReportSummaryResponse
@@ -228,7 +228,7 @@ class ReportError(BaseModel):
 
 class ReportGenerationStatus(BaseModel):
     report_id: str
-    status: str = Field(..., regex="^(pending|processing|completed|failed)$")
+    status: str = Field(..., pattern="^(pending|processing|completed|failed)$")
     progress_percentage: int = Field(..., ge=0, le=100)
     estimated_completion: Optional[datetime] = None
     error: Optional[ReportError] = None
