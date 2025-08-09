@@ -1,36 +1,54 @@
-from datetime import datetime, timedelta
-from typing import Optional, Union
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from typing import Optional, Dict, Any
+import httpx
 from app.config.settings import settings
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against its hash"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password: str) -> str:
-    """Hash a password"""
-    return pwd_context.hash(password)
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    return encoded_jwt
-
-def verify_token(token: str) -> Optional[dict]:
-    """Verify JWT token and return payload"""
+async def verify_google_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify Google OAuth token and return user info
+    """
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        return payload
-    except JWTError:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={token}"
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+                
+    except Exception:
         return None
+
+async def verify_google_id_token(id_token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify Google ID token and return user info
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}"
+            )
+            
+            if response.status_code == 200:
+                token_info = response.json()
+                # Verify the token is for your app
+                if token_info.get("aud") == settings.GOOGLE_CLIENT_ID:
+                    return token_info
+                    
+            return None
+            
+    except Exception:
+        return None
+
+def extract_user_info(google_user_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract and standardize user information from Google OAuth response
+    """
+    return {
+        "google_id": google_user_data.get("id"),
+        "email": google_user_data.get("email"),
+        "name": google_user_data.get("name"),
+        "picture": google_user_data.get("picture"),
+        "verified_email": google_user_data.get("verified_email", False)
+    }

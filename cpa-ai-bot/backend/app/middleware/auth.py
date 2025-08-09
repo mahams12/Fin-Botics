@@ -1,23 +1,127 @@
-from fastapi import Request, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from fastapi import Request
 import time
 from typing import Optional
-from google.auth.transport import requests
-from google.oauth2 import id_token
-from app.config.settings import settings
-from app.database.user_db import UserDatabase
+from app.services.auth_service import AuthService
+from app.models.user import User
 from app.utils.logger import get_logger
 
 logger = get_logger("auth_middleware")
 
+# Updated dependencies
+auth_service = AuthService()
+
+async def get_current_user_by_session(
+    session_id: Optional[str] = Header(None, alias="X-Session-ID"),
+    session_cookie: Optional[str] = Cookie(None, alias="session_id")
+) -> User:
+    """Get current authenticated user by session ID"""
+    # Try to get session ID from header first, then cookie
+    current_session_id = session_id or session_cookie
+    
+    if not current_session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No session ID provided",
+        )
+    
+    user = await auth_service.get_current_user_by_session(current_session_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+        )
+    return user
+
+async def get_current_user_by_token(
+    authorization: Optional[str] = Header(None)
+) -> User:
+    """Get current authenticated user by Google token"""
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No authorization header provided",
+        )
+    
+    # Extract token from Bearer authorization
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication scheme",
+            )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header format",
+        )
+    
+    user = await auth_service.get_current_user_by_token(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate Google token",
+        )
+    return user
+
+async def get_current_active_user_by_session(
+    current_user: User = Depends(get_current_user_by_session)
+) -> User:
+    """Get current active user via session"""
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Inactive user"
+        )
+    return current_user
+
+async def get_current_active_user_by_token(
+    current_user: User = Depends(get_current_user_by_token)
+) -> User:
+    """Get current active user via Google token"""
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Inactive user"
+        )
+    return current_user
+
+async def get_admin_user_by_session(
+    current_user: User = Depends(get_current_active_user_by_session)
+) -> User:
+    """Get admin user via session"""
+    if not getattr(current_user, 'is_admin', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user
+
+async def get_admin_user_by_token(
+    current_user: User = Depends(get_current_active_user_by_token)
+) -> User:
+    """Get admin user via Google token"""
+    if not getattr(current_user, 'is_admin', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user
+
+# Convenience aliases for backward compatibility
+get_current_active_user = get_current_active_user_by_session
+get_admin_user = get_admin_user_by_session
+
 class AuthMiddleware(BaseHTTPMiddleware):
-    """Authentication middleware for protected routes using Google OAuth"""
+    """Authentication middleware for protected routes using session-based auth"""
     
     def __init__(self, app, protected_paths: list = None):
         super().__init__(app)
-        self.user_db = UserDatabase()
+        self.user_db = auth_service.user_db
         self.protected_paths = protected_paths or [
             "/api/v1/users",
             "/api/v1/expenses", 
@@ -32,7 +136,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/docs",
             "/redoc",
             "/openapi.json",
-            "/api/v1/auth/google"
+            "/api/v1/auth/google",
+            "/api/v1/auth/status"
         ]
 
     async def dispatch(self, request: Request, call_next):
@@ -56,25 +161,32 @@ class AuthMiddleware(BaseHTTPMiddleware):
         
         # Check if path requires authentication
         if self._requires_auth(path):
-            auth_header = request.headers.get("Authorization")
+            # Try session-based auth first
+            session_id = request.headers.get("X-Session-ID") or request.cookies.get("session_id")
+            user = None
             
-            if not auth_header or not auth_header.startswith("Bearer "):
-                logger.warning(f"Missing or invalid Authorization header for {path}")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Missing or invalid authorization header",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+            if session_id:
+                user = await auth_service.get_current_user_by_session(session_id)
             
-            token = auth_header.split(" ")[1]
-            user = await self._verify_google_token_and_get_user(token)
+            # If session auth failed, try Google token
+            if not user:
+                auth_header = request.headers.get("Authorization")
+                if auth_header and auth_header.startswith("Bearer "):
+                    token = auth_header.split(" ")[1]
+                    user = await auth_service.get_current_user_by_token(token)
             
             if not user:
-                logger.warning(f"Invalid Google token for {path}")
+                logger.warning(f"Authentication failed for {method} {path}")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired Google token",
-                    headers={"WWW-Authenticate": "Bearer"},
+                    detail="Authentication required",
+                )
+            
+            if not user.is_active:
+                logger.warning(f"Inactive user attempted access: {user.email}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Account is inactive",
                 )
             
             # Add user info to request state
@@ -87,30 +199,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         response.headers["X-Process-Time"] = str(process_time)
         
         return response
-    
-    async def _verify_google_token_and_get_user(self, token: str) -> Optional[User]:
-        """Verify Google token and return user"""
-        try:
-            # Verify Google OAuth token
-            idinfo = id_token.verify_oauth2_token(
-                token, requests.Request(), settings.GOOGLE_CLIENT_ID
-            )
-
-            # Check issuer
-            if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                raise ValueError('Wrong issuer.')
-
-            email = idinfo.get('email')
-            if not email:
-                return None
-
-            # Get user from database
-            user = await self.user_db.get_user_by_email(email)
-            return user
-
-        except ValueError as e:
-            logger.error(f"Google token verification failed: {e}")
-            return None
     
     def _is_public_path(self, path: str) -> bool:
         """Check if path is public (no auth required)"""

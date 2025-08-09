@@ -4,62 +4,12 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from .user import PyObjectId
 
-class TokenType:
-    ACCESS = "access"
-    REFRESH = "refresh"
-    RESET_PASSWORD = "reset_password"
-    EMAIL_VERIFICATION = "email_verification"
-    API_KEY = "api_key"
-
-TOKEN_TYPES = [
-    TokenType.ACCESS,
-    TokenType.REFRESH,
-    TokenType.RESET_PASSWORD,
-    TokenType.EMAIL_VERIFICATION,
-    TokenType.API_KEY
-]
-
 class AuthProvider:
-    EMAIL = "email"
     GOOGLE = "google"
-    FACEBOOK = "facebook"
-    GITHUB = "github"
-    MICROSOFT = "microsoft"
 
 AUTH_PROVIDERS = [
-    AuthProvider.EMAIL,
-    AuthProvider.GOOGLE,
-    AuthProvider.FACEBOOK,
-    AuthProvider.GITHUB,
-    AuthProvider.MICROSOFT
+    AuthProvider.GOOGLE
 ]
-
-class TokenBase(BaseModel):
-    token: str
-    token_type: str
-    expires_at: datetime
-    is_revoked: bool = False
-    user_id: str
-
-class TokenCreate(TokenBase):
-    pass
-
-class TokenInDB(TokenBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_used_at: Optional[datetime] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-
-class Token(TokenInDB):
-    pass
 
 class LoginAttempt(BaseModel):
     """Track login attempts for security"""
@@ -69,6 +19,7 @@ class LoginAttempt(BaseModel):
     success: bool
     failure_reason: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    provider: str = AuthProvider.GOOGLE
     
 class LoginAttemptInDB(LoginAttempt):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -86,6 +37,8 @@ class SessionBase(BaseModel):
     user_agent: Optional[str] = None
     is_active: bool = True
     expires_at: datetime
+    google_token: Optional[str] = None  # Store Google access token
+    google_refresh_token: Optional[str] = None
 
 class SessionCreate(SessionBase):
     pass
@@ -108,7 +61,7 @@ class Session(SessionInDB):
 class OAuthState(BaseModel):
     """OAuth state for security"""
     state: str
-    provider: str
+    provider: str = AuthProvider.GOOGLE
     redirect_uri: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: datetime
@@ -122,70 +75,19 @@ class OAuthStateInDB(OAuthState):
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 
-class PasswordReset(BaseModel):
-    """Password reset token"""
+class GoogleUserInfo(BaseModel):
+    """Google user information from OAuth"""
+    google_id: str
     email: EmailStr
-    token: str
-    expires_at: datetime
-    used: bool = False
-    
-class PasswordResetInDB(PasswordReset):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    ip_address: Optional[str] = None
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-
-class EmailVerification(BaseModel):
-    """Email verification token"""
-    email: EmailStr
-    token: str
-    expires_at: datetime
-    verified: bool = False
-    
-class EmailVerificationInDB(EmailVerification):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-
-class APIKey(BaseModel):
-    """API key for programmatic access"""
     name: str
-    key_hash: str  # Hashed version of the key
-    permissions: List[str] = []
-    is_active: bool = True
-    expires_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
-    
-class APIKeyInDB(APIKey):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    picture: Optional[str] = None
+    verified_email: bool = False
 
 class SecuritySettings(BaseModel):
-    """User security settings"""
-    two_factor_enabled: bool = False
-    two_factor_secret: Optional[str] = None
-    backup_codes: List[str] = []
-    password_changed_at: Optional[datetime] = None
+    """User security settings (simplified for Google OAuth only)"""
     failed_login_attempts: int = 0
     locked_until: Optional[datetime] = None
-    security_questions: Dict[str, str] = {}
+    last_login_at: Optional[datetime] = None
 
 class SecuritySettingsInDB(SecuritySettings):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -201,10 +103,11 @@ class SecuritySettingsInDB(SecuritySettings):
 class AuthLog(BaseModel):
     """Authentication events log"""
     user_id: Optional[str] = None
-    event_type: str  # login, logout, register, password_change, etc.
+    event_type: str  # login, logout, register, token_refresh, etc.
     ip_address: str
     user_agent: Optional[str] = None
     success: bool
+    provider: str = AuthProvider.GOOGLE
     details: Optional[Dict[str, Any]] = {}
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
@@ -218,34 +121,25 @@ class AuthLogInDB(AuthLog):
         json_encoders = {ObjectId: str}
 
 # Response models for API
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    refresh_token: Optional[str] = None
-    scope: Optional[str] = None
-
 class AuthResponse(BaseModel):
     user: Dict[str, Any]
-    tokens: TokenResponse
     session_id: str
+    google_token: Optional[str] = None
 
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+class GoogleAuthRequest(BaseModel):
+    """Google OAuth authorization request"""
+    code: Optional[str] = None  # Authorization code from Google
+    id_token: Optional[str] = None  # ID token from Google
+    access_token: Optional[str] = None  # Access token from Google
+    redirect_uri: Optional[str] = None
 
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
+class GoogleAuthResponse(BaseModel):
+    """Google OAuth response"""
+    access_token: str
+    refresh_token: Optional[str] = None
+    expires_in: int
+    id_token: Optional[str] = None
+    token_type: str = "Bearer"
 
-class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-
-class EnableTwoFactorRequest(BaseModel):
-    password: str
-
-class VerifyTwoFactorRequest(BaseModel):
-    code: str
+class LogoutRequest(BaseModel):
+    session_id: str
