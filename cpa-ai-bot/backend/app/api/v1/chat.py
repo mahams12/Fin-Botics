@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from typing import List, Optional
 from app.services.chat_service import ChatService
 from app.schemas.chat_schema import (
     ChatMessageRequest, ChatMessageResponse, 
     ChatSessionResponse, ChatHistoryResponse
 )
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user_by_token
 from app.models.user import User
 import logging
 
@@ -16,7 +16,7 @@ chat_service = ChatService()
 @router.post("/message", response_model=ChatMessageResponse)
 async def send_message(
     request: ChatMessageRequest,
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user_by_token)
 ):
     """Send a message to the AI bot"""
     try:
@@ -25,11 +25,11 @@ async def send_message(
         # Create new session if none provided
         if not request.session_id:
             session = await chat_service.create_session(user_id)
-            session_id = session.session_id
+            chat_session_id = session.session_id
         else:
-            session_id = request.session_id
+            chat_session_id = request.session_id
             # Verify session belongs to user
-            session = await chat_service.get_session(session_id, user_id)
+            session = await chat_service.get_session(chat_session_id, user_id)
             if not session:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -38,7 +38,7 @@ async def send_message(
         
         # Process the message
         result = await chat_service.process_message(
-            session_id, 
+            chat_session_id, 
             user_id, 
             request.message
         )
@@ -46,7 +46,7 @@ async def send_message(
         return ChatMessageResponse(
             response=result["response"],
             type=result["type"],
-            session_id=session_id,
+            session_id=chat_session_id,
             data=result.get("data")
         )
         
@@ -61,7 +61,7 @@ async def send_message(
 
 @router.get("/sessions", response_model=List[ChatSessionResponse])
 async def get_chat_sessions(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user_by_token)
 ):
     """Get user's chat sessions"""
     try:
@@ -85,14 +85,14 @@ async def get_chat_sessions(
             detail="Failed to retrieve chat sessions"
         )
 
-@router.get("/sessions/{session_id}", response_model=ChatHistoryResponse)
+@router.get("/sessions/{chat_session_id}/history", response_model=ChatHistoryResponse)
 async def get_chat_history(
-    session_id: str,
-    current_user: User = Depends(get_current_active_user)
+    chat_session_id: str,
+    current_user: User = Depends(get_current_active_user_by_token)
 ):
     """Get chat history for a session"""
     try:
-        session = await chat_service.get_session(session_id, str(current_user.id))
+        session = await chat_service.get_session(chat_session_id, str(current_user.id))
         
         if not session:
             raise HTTPException(
@@ -127,8 +127,8 @@ async def get_chat_history(
 
 @router.post("/sessions", response_model=ChatSessionResponse)
 async def create_chat_session(
-    title: str = "New Chat",
-    current_user: User = Depends(get_current_active_user)
+    title: str = Query(default="New Chat"),
+    current_user: User = Depends(get_current_active_user_by_token)
 ):
     """Create a new chat session"""
     try:
@@ -147,4 +147,30 @@ async def create_chat_session(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create chat session"
+        )
+
+@router.delete("/sessions/{chat_session_id}")
+async def delete_chat_session(
+    chat_session_id: str,
+    current_user: User = Depends(get_current_active_user_by_token)
+):
+    """Delete a chat session"""
+    try:
+        success = await chat_service.delete_session(chat_session_id, str(current_user.id))
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Chat session not found"
+            )
+        
+        return {"message": "Chat session deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting chat session: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete chat session"
         )
