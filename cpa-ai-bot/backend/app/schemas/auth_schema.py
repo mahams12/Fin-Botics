@@ -4,6 +4,9 @@ from datetime import datetime
 
 class GoogleAuthRequest(BaseModel):
     """Google OAuth authentication request"""
+    # Add the credential field that your frontend is sending
+    credential: Optional[str] = Field(None, description="JWT credential token from Google OAuth")
+    token: Optional[str] = Field(None, description="Alternative token field name")
     code: Optional[str] = Field(None, description="Authorization code from Google OAuth")
     id_token: Optional[str] = Field(None, description="ID token from Google")
     access_token: Optional[str] = Field(None, description="Access token from Google")
@@ -11,8 +14,11 @@ class GoogleAuthRequest(BaseModel):
     state: Optional[str] = Field(None, description="State parameter for security")
 
     class Config:
+        # Allow extra fields from frontend
+        extra = "allow"
         json_schema_extra = {
             "example": {
+                "credential": "eyJhbGciOiJSUzI1NiIs...",
                 "code": "4/0AX4XfWh...",
                 "redirect_uri": "http://localhost:3000/auth/callback",
                 "state": "random_state_string"

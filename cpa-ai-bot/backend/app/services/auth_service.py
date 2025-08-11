@@ -137,24 +137,35 @@ class AuthService:
     async def verify_google_token(self, token: str) -> Optional[dict]:
         """Verify Google OAuth token"""
         try:
+            logger.info(f"🔍 Attempting to verify Google token with CLIENT_ID: {settings.GOOGLE_CLIENT_ID}")
+            
             # Specify the CLIENT_ID of the app that accesses the backend
             idinfo = id_token.verify_oauth2_token(
                 token, requests.Request(), settings.GOOGLE_CLIENT_ID
             )
 
+            logger.info(f"✅ Token verification successful. User: {idinfo.get('email')}")
+
             # If auth request is from a G Suite domain
             if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+                logger.error(f"❌ Wrong issuer: {idinfo['iss']}")
                 raise ValueError('Wrong issuer.')
 
             return idinfo
         except ValueError as e:
-            logger.error(f"Google token verification failed: {e}")
+            logger.error(f"❌ Google token verification failed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Unexpected error during token verification: {e}")
             return None
 
     async def google_auth(self, token: str) -> Optional[Dict[str, Any]]:
         """Authenticate or create user via Google OAuth and create session"""
+        logger.info("🚀 Starting Google authentication")
+        
         google_user = await self.verify_google_token(token)
         if not google_user:
+            logger.error("❌ Google token verification failed")
             return None
 
         email = google_user.get('email')
@@ -162,32 +173,40 @@ class AuthService:
         google_id = google_user.get('sub')
         picture = google_user.get('picture', '')
 
+        logger.info(f"✅ Google user verified: {email}")
+
         # Check if user exists
         user = await self.user_db.get_user_by_email(email)
 
         if not user:
-            # Create new user
+            logger.info(f"🆕 Creating new user for: {email}")
+            # Create new user - REMOVED profile_picture field
             user_data = {
                 "email": email,
                 "full_name": name,
                 "google_id": google_id,
-                "profile_picture": picture,
+                # "profile_picture": picture,  # REMOVED - your User model doesn't have this
                 "is_active": True,
-                "email_verified": True  # Google emails are pre-verified
+                # "email_verified": True  # REMOVED - your User model doesn't have this
             }
             user = await self.create_google_user(user_data)
         else:
-            # Update Google ID and profile if not set or changed
+            logger.info(f"👤 Existing user found: {email}")
+            # Update Google ID if not set
             update_data = {}
-            if not user.google_id:
+            if not getattr(user, 'google_id', None):
                 update_data["google_id"] = google_id
-            if user.profile_picture != picture:
-                update_data["profile_picture"] = picture
+                logger.info(f"📝 Updating Google ID for existing user")
+            
+            # Note: Removed profile_picture update since your User model doesn't have this field
+            
             if update_data:
                 await self.user_db.update_user(user.id, update_data)
 
         # Create session
         session_id = await self.create_session(user, token)
+        
+        logger.info(f"✅ Google authentication successful for: {email}")
         
         return {
             "user": user,
@@ -229,6 +248,7 @@ class AuthService:
         """Create a new session for the user"""
         session_id = str(uuid.uuid4())
         session_data = {
+            "session_id": session_id,  # Add this field for consistency
             "user_id": str(user.id),
             "user_email": user.email,
             "google_token": google_token,
@@ -239,6 +259,16 @@ class AuthService:
         }
         
         self.active_sessions[session_id] = session_data
+        
+        # Also store in database for persistence
+        try:
+            from app.config.database import get_database
+            db = await get_database()
+            await db.sessions.insert_one(session_data)
+            logger.info(f"💾 Stored Google session in database: {session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to store Google session in database: {e}")
+        
         logger.info(f"Created session {session_id} for user {user.email}")
         return session_id
 

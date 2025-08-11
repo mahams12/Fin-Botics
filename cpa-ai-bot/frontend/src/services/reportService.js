@@ -106,12 +106,109 @@ export const reportService = {
     return response;
   },
 
-  // Export report
+  // Export report - FIXED TO HANDLE FILE DOWNLOADS
   exportReport: async (reportId, format = 'pdf') => {
-    const response = await apiMethods.download(`/reports/${reportId}/export`, {
-      params: { format }
-    });
-    return response;
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/api/v1/reports/${reportId}/export?format=${format}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('session_id')}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Get the blob data
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Set filename based on format
+      const timestamp = new Date().toISOString().split('T')[0];
+      link.download = `report_${reportId}_${timestamp}.${format}`;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true, message: 'File downloaded successfully' };
+    } catch (error) {
+      console.error('Export error:', error);
+      throw error;
+    }
+  },
+
+  // Alternative export method using apiMethods (if your api.js supports blob responses)
+  exportReportBlob: async (reportId, format = 'pdf') => {
+    try {
+      const response = await apiMethods.get(`/reports/${reportId}/export`, {
+        params: { format },
+        responseType: 'blob' // This needs to be supported in your api.js
+      });
+      
+      // Handle blob response
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `report_${reportId}.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return response;
+    } catch (error) {
+      console.error('Export error:', error);
+      throw error;
+    }
+  },
+
+  // Download generated report directly (for quick reports)
+  downloadReport: async (reportType, format = 'pdf', params = {}) => {
+    try {
+      const queryParams = new URLSearchParams({
+        format,
+        start_date: params.start_date || '',
+        end_date: params.end_date || ''
+      }).toString();
+
+      console.log(`🔧 Downloading ${reportType} as ${format}`);
+      
+      // Use apiMethods.get instead of fetch to use your existing API configuration
+      const response = await apiMethods.get(`/reports/download/${reportType}?${queryParams}`, {
+        responseType: 'blob'
+      });
+
+      console.log(`🔧 Download successful`);
+      
+      // Handle blob response from apiMethods
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const timestamp = new Date().toISOString().split('T')[0];
+      link.download = `${reportType}_${timestamp}.${format}`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log(`✅ Download completed: ${reportType}_${timestamp}.${format}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Download error:', error);
+      throw error;
+    }
   },
 
   // Email report

@@ -40,7 +40,7 @@ async def register(user_data: UserCreateRequest):
                 "email": user.email,
                 "full_name": user.full_name,
                 "is_active": user.is_active,
-                "google_id": user.google_id,
+                "google_id": getattr(user, 'google_id', None),
                 "profile_picture": getattr(user, 'profile_picture', None)
             },
             google_token=None,
@@ -87,7 +87,7 @@ async def login(login_data: dict):
                 "email": user.email,
                 "full_name": user.full_name,
                 "is_active": user.is_active,
-                "google_id": user.google_id,
+                "google_id": getattr(user, 'google_id', None),
                 "profile_picture": getattr(user, 'profile_picture', None)
             },
             google_token=None,
@@ -107,48 +107,88 @@ async def login(login_data: dict):
 async def google_auth(request: GoogleAuthRequest, http_request: Request):
     """Authenticate with Google OAuth"""
     try:
-        # Use either code, id_token, or access_token from the request
-        token = request.id_token or request.access_token or request.code
+        logger.info(f"🔍 Received Google auth request")
+        logger.info(f"🔍 Request credential: {getattr(request, 'credential', 'None')[:50] if getattr(request, 'credential', None) else 'None'}...")
+        logger.info(f"🔍 Request id_token: {getattr(request, 'id_token', 'None')[:50] if getattr(request, 'id_token', None) else 'None'}...")
+        logger.info(f"🔍 Request access_token: {getattr(request, 'access_token', 'None')[:50] if getattr(request, 'access_token', None) else 'None'}...")
+        logger.info(f"🔍 Request token: {getattr(request, 'token', 'None')[:50] if getattr(request, 'token', None) else 'None'}...")
+        
+        # Extract token from multiple possible fields (now including credential)
+        token = (
+            getattr(request, 'credential', None) or      # Main field from frontend
+            getattr(request, 'token', None) or           # Alternative field name  
+            getattr(request, 'id_token', None) or        # JWT ID token
+            getattr(request, 'access_token', None) or    # Access token
+            getattr(request, 'code', None)               # Authorization code
+        )
+        
+        logger.info(f"🔍 Final extracted token (first 50 chars): {token[:50] if token else 'None'}...")
         
         if not token:
+            logger.error("❌ No valid Google token found in request")
+            logger.error(f"❌ Available request fields: {[attr for attr in dir(request) if not attr.startswith('_')]}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No valid Google token provided"
             )
         
+        logger.info("🚀 Calling auth_service.google_auth with token")
         result = await auth_service.google_auth(token)
         
         if not result:
+            logger.error("❌ auth_service.google_auth returned None/False")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Google authentication failed"
+                detail="Google authentication failed - token verification failed"
             )
+        
+        logger.info("✅ Google auth successful, preparing response")
         
         user = result["user"]
         session_id = result["session_id"]
         google_token = result["google_token"]
         
-        return TokenResponse(
+        response_data = TokenResponse(
             session_id=session_id,
             user={
                 "id": str(user.id),
                 "email": user.email,
                 "full_name": user.full_name,
                 "is_active": user.is_active,
-                "google_id": user.google_id,
+                "google_id": getattr(user, 'google_id', None),
                 "profile_picture": getattr(user, 'profile_picture', None)
             },
             google_token=google_token,
             expires_in=86400  # 24 hours in seconds
         )
         
+        logger.info(f"✅ Returning successful response for user: {user.email}")
+        return response_data
+        
     except HTTPException:
+        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        logger.error(f"Google auth error: {e}")
+        logger.error(f"❌ Google auth error: {e}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        
+        # Import traceback for detailed error logging
+        import traceback
+        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+        
+        # Return more specific error message based on error type
+        if "verify_oauth2_token" in str(e):
+            detail = "Invalid Google token - token verification failed"
+        elif "CLIENT_ID" in str(e):
+            detail = "Google client configuration error"
+        elif "network" in str(e).lower() or "connection" in str(e).lower():
+            detail = "Network error during Google token verification"
+        else:
+            detail = f"Google authentication failed: {str(e)}"
+            
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Google authentication failed"
+            detail=detail
         )
 
 @router.get("/me", response_model=AuthStatusResponse)
