@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 // Initial state
 const initialState = {
   user: null,
-  token: localStorage.getItem('token'),
+  session_id: localStorage.getItem('session_id'), // Changed from token
   loading: true,
   error: null,
   isAuthenticated: false,
@@ -45,21 +45,24 @@ const authReducer = (state, action) => {
         loading: false,
       };
     case AUTH_ACTIONS.LOGIN_SUCCESS:
-      localStorage.setItem('token', action.payload.token);
+      // Store session_id instead of token
+      localStorage.setItem('session_id', action.payload.session_id);
       return {
         ...state,
         user: action.payload.user,
-        token: action.payload.token,
+        session_id: action.payload.session_id, // Changed from token
         isAuthenticated: true,
         loading: false,
         error: null,
       };
     case AUTH_ACTIONS.LOGOUT:
+      // Remove both token and session_id for compatibility
       localStorage.removeItem('token');
+      localStorage.removeItem('session_id');
       return {
         ...state,
         user: null,
-        token: null,
+        session_id: null, // Changed from token
         isAuthenticated: false,
         loading: false,
         error: null,
@@ -89,8 +92,10 @@ export const AuthProvider = ({ children }) => {
   // Check if user is authenticated on app load
   useEffect(() => {
     const initializeAuth = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
+      const sessionId = localStorage.getItem('session_id');
+      const token = localStorage.getItem('token'); // Fallback for compatibility
+      
+      if (sessionId || token) {
         try {
           dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
           const userData = await authService.getCurrentUser();
@@ -98,6 +103,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
           console.error('Auth initialization error:', error);
           localStorage.removeItem('token');
+          localStorage.removeItem('session_id');
           dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: 'Session expired' });
         }
       } else {
@@ -115,6 +121,16 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       
       const response = await authService.login(email, password);
+      console.log('Login response:', response); // Debug log
+      
+      // Ensure session_id is stored immediately and separately
+      if (response.session_id) {
+        localStorage.setItem('session_id', response.session_id);
+        console.log('✅ Stored session_id:', response.session_id);
+      } else {
+        console.error('❌ No session_id in response:', response);
+      }
+      
       dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: response });
       
       toast.success('Successfully logged in!');
@@ -153,6 +169,16 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       
       const response = await authService.register(userData);
+      console.log('Register response:', response); // Debug log
+      
+      // Ensure session_id is stored immediately
+      if (response.session_id) {
+        localStorage.setItem('session_id', response.session_id);
+        console.log('✅ Stored session_id after registration:', response.session_id);
+      } else {
+        console.error('❌ No session_id in registration response:', response);
+      }
+      
       dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: response });
       
       toast.success('Account created successfully!');

@@ -92,20 +92,28 @@ const LoginPage = () => {
 
     try {
       if (isSignUp) {
-        await register({
+        // Debug: Log the data being sent
+        const registrationData = {
           email: formData.email,
           password: formData.password,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          business_name: formData.businessName,
-        });
+          full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+        };
+        console.log('Sending registration data:', registrationData);
+        
+        await register(registrationData);
       } else {
+        console.log('Sending login data:', {
+          email: formData.email,
+          password: formData.password
+        });
+        
         await login(formData.email, formData.password);
       }
       navigate('/dashboard');
     } catch (error) {
       // Error is handled by the auth context
       console.error('Authentication error:', error);
+      console.error('Error response:', error.response?.data);
     }
   };
 
@@ -156,7 +164,7 @@ const LoginPage = () => {
           {/* Error Message */}
           {error && (
             <div className="alert alert-error mb-6">
-              {error}
+              {typeof error === 'string' ? error : error.detail || 'An error occurred'}
             </div>
           )}
 

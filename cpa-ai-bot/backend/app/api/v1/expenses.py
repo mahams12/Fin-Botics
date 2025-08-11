@@ -84,6 +84,52 @@ async def create_expense_from_text(
             detail="Failed to process expense text"
         )
 
+@router.get("/stats")
+async def get_expense_stats(
+    start: str = Query(..., description="Start date in ISO format"),
+    end: str = Query(..., description="End date in ISO format"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get expense statistics for a date range"""
+    try:
+        from datetime import datetime
+        import urllib.parse
+        
+        # Parse the URL-encoded date strings
+        start_decoded = urllib.parse.unquote(start)
+        end_decoded = urllib.parse.unquote(end)
+        
+        # Convert to datetime objects
+        # Handle the GMT+0500 (Pakistan Standard Time) format
+        start_date = datetime.fromisoformat(start_decoded.replace(' GMT+0500 (Pakistan Standard Time)', '+05:00'))
+        end_date = datetime.fromisoformat(end_decoded.replace(' GMT+0500 (Pakistan Standard Time)', '+05:00'))
+        
+        # Convert to date objects for the service
+        start_date = start_date.date()
+        end_date = end_date.date()
+        
+        # Get expense statistics from service
+        stats = await expense_service.get_expense_stats(
+            user_id=str(current_user.id),
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        return stats
+        
+    except ValueError as e:
+        logger.error(f"Error parsing date parameters: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format"
+        )
+    except Exception as e:
+        logger.error(f"Error getting expense stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve expense statistics"
+        )
+
 @router.get("/", response_model=ExpenseListResponse)
 async def get_expenses(
     page: int = Query(1, ge=1),

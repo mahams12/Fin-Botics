@@ -1,30 +1,51 @@
-from fastapi import Depends, HTTPException, status, Header, Cookie
+from fastapi import Depends, HTTPException, status, Header, Cookie, Request
 from typing import Optional
 from app.services.auth_service import AuthService
 from app.models.user import User
+import logging
 
+logger = logging.getLogger(__name__)
 auth_service = AuthService()
 
-async def get_current_user_by_session(
-    session_id: Optional[str] = Header(None, alias="X-Session-ID"),
-    session_cookie: Optional[str] = Cookie(None, alias="session_id")
-) -> User:
-    """Get current authenticated user by session ID"""
-    # Try to get session ID from header first, then cookie
-    current_session_id = session_id or session_cookie
+async def get_current_user_by_session(request: Request) -> User:
+    """Get current authenticated user by session ID from multiple sources"""
     
-    if not current_session_id:
+    # Try to get session ID from multiple sources
+    session_id = None
+    
+    # 1. Check X-Session-ID header
+    session_id = request.headers.get("X-Session-ID")
+    
+    # 2. Check Authorization header (Bearer format)
+    if not session_id:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_id = auth_header.replace("Bearer ", "")
+    
+    # 3. Check query parameters
+    if not session_id:
+        session_id = request.query_params.get("session_id")
+    
+    # 4. Check cookies
+    if not session_id:
+        session_id = request.cookies.get("session_id")
+    
+    if not session_id:
+        logger.warning("No session ID found in request")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No session ID provided",
         )
     
-    user = await auth_service.get_current_user_by_session(current_session_id)
+    user = await auth_service.get_current_user_by_session(session_id)
     if not user:
+        logger.warning(f"Invalid or expired session: {session_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired session",
         )
+    
+    logger.info(f"Authenticated user: {user.email}")
     return user
 
 async def get_current_user_by_token(
@@ -60,9 +81,10 @@ async def get_current_user_by_token(
     return user
 
 async def get_current_active_user_by_session(
-    current_user: User = Depends(get_current_user_by_session)
+    request: Request
 ) -> User:
     """Get current active user via session"""
+    current_user = await get_current_user_by_session(request)
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
@@ -107,18 +129,10 @@ async def get_admin_user_by_token(
 get_current_active_user = get_current_active_user_by_session
 get_admin_user = get_admin_user_by_session
 
-async def get_optional_user(
-    session_id: Optional[str] = Header(None, alias="X-Session-ID"),
-    session_cookie: Optional[str] = Cookie(None, alias="session_id")
-) -> Optional[User]:
+async def get_optional_user(request: Request) -> Optional[User]:
     """Get current user if authenticated, None otherwise (no exception)"""
-    current_session_id = session_id or session_cookie
-    
-    if not current_session_id:
-        return None
-    
     try:
-        user = await auth_service.get_current_user_by_session(current_session_id)
+        user = await get_current_user_by_session(request)
         return user if user and user.is_active else None
     except Exception:
         return None

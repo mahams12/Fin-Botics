@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import './App.css';
 
@@ -17,7 +18,8 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import Loading from './components/common/Loading';
 import ErrorMessage from './components/common/ErrorMessage';
 
-function App() {
+// App content component (inside AuthProvider)
+function AppContent() {
   const { user, loading, error } = useAuth();
 
   if (loading) {
@@ -87,6 +89,15 @@ function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </div>
+  );
+}
+
+// Main App component with AuthProvider
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

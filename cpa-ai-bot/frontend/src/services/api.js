@@ -3,20 +3,32 @@ import toast from 'react-hot-toast';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080/api/v1', // Updated port
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add session ID
 api.interceptors.request.use(
   (config) => {
+    // Check for both token (legacy) and session_id (new)
+    const sessionId = localStorage.getItem('session_id');
     const token = localStorage.getItem('token');
-    if (token) {
+    
+    if (sessionId) {
+      // Add session ID as multiple headers/params for compatibility
+      config.headers['X-Session-ID'] = sessionId;
+      config.headers['Authorization'] = `Bearer ${sessionId}`;
+      // Also add as query parameter for endpoints that expect it
+      config.params = config.params || {};
+      config.params.session_id = sessionId;
+    } else if (token) {
+      // Fallback to Bearer token if session_id not found
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
     return config;
   },
   (error) => {
@@ -35,8 +47,9 @@ api.interceptors.response.use(
     if (response) {
       switch (response.status) {
         case 401:
-          // Unauthorized - clear token and redirect to login
+          // Unauthorized - clear session and redirect to login
           localStorage.removeItem('token');
+          localStorage.removeItem('session_id');
           window.location.href = '/login';
           toast.error('Session expired. Please login again.');
           break;

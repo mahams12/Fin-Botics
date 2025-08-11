@@ -3,17 +3,136 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 from app.config.settings import settings
 from app.database.user_db import UserDatabase
-from app.models.user import UserCreate, User
+from app.models.user import User
 import uuid
 from datetime import datetime, timedelta
 import logging
+import bcrypt
 
 logger = logging.getLogger(__name__)
+
+# Global session store - shared across all instances
+_global_sessions: Dict[str, Dict[str, Any]] = {}
 
 class AuthService:
     def __init__(self):
         self.user_db = UserDatabase()
-        self.active_sessions: Dict[str, Dict[str, Any]] = {}  # In-memory session store
+        # Use global session store instead of instance variable
+        self.active_sessions = _global_sessions
+        logger.info(f"AuthService initialized with {len(self.active_sessions)} existing sessions")
+
+    def _hash_password(self, password: str) -> str:
+        """Hash a password using bcrypt"""
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
+
+    def _verify_password(self, password: str, hashed_password: str) -> bool:
+        """Verify a password against its hash"""
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email address"""
+        return await self.user_db.get_user_by_email(email)
+
+    async def register_user(self, user_data) -> Dict[str, Any]:
+        """Register a new user with email and password"""
+        # Check if user already exists
+        existing_user = await self.user_db.get_user_by_email(user_data.email)
+        if existing_user:
+            raise ValueError("User with this email already exists")
+
+        # Hash the password
+        if user_data.password:
+            hashed_password = self._hash_password(user_data.password)
+        else:
+            raise ValueError("Password is required")
+
+        # Create user data
+        user_dict = {
+            "email": user_data.email,
+            "full_name": user_data.full_name,
+            "hashed_password": hashed_password,
+            "is_active": True,
+            "is_admin": False,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Create user in database
+        user = await self.user_db.create_user(user_dict)
+        
+        # Create session for the new user
+        session_id = await self.create_session_email_auth(user)
+        
+        logger.info(f"Registered new user: {user.email}")
+        
+        return {
+            "user": user,
+            "session_id": session_id
+        }
+
+    async def authenticate_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Authenticate user with email and password"""
+        # Get user from database
+        user = await self.user_db.get_user_by_email(email)
+        if not user:
+            return None
+
+        # Check if user has a password (might be Google-only user)
+        if not hasattr(user, 'hashed_password') or not user.hashed_password:
+            logger.warning(f"User {email} attempted login but has no password set")
+            return None
+
+        # Verify password
+        if not self._verify_password(password, user.hashed_password):
+            logger.warning(f"Failed login attempt for user {email}")
+            return None
+
+        # Check if user is active
+        if not user.is_active:
+            logger.warning(f"Login attempt for inactive user {email}")
+            return None
+
+        # Create session
+        session_id = await self.create_session_email_auth(user)
+        
+        logger.info(f"Successful login for user {email}")
+        
+        return {
+            "user": user,
+            "session_id": session_id
+        }
+
+    async def create_session_email_auth(self, user: User) -> str:
+        """Create a new session for email/password authentication"""
+        session_id = str(uuid.uuid4())
+        session_data = {
+            "session_id": session_id,
+            "user_id": str(user.id),
+            "user_email": user.email,
+            "auth_type": "email",
+            "created_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(hours=24),
+            "last_activity": datetime.utcnow()
+        }
+        
+        # Store in memory
+        self.active_sessions[session_id] = session_data
+        
+        # Also store in database for persistence
+        try:
+            from app.config.database import get_database
+            db = await get_database()
+            await db.sessions.insert_one(session_data)
+            logger.info(f"💾 Stored session in database: {session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to store session in database: {e}")
+        
+        logger.info(f"🔐 Created email auth session {session_id} for user {user.email}")
+        logger.info(f"🔐 Total active sessions: {len(self.active_sessions)}")
+        
+        return session_id
 
     async def verify_google_token(self, token: str) -> Optional[dict]:
         """Verify Google OAuth token"""
@@ -48,15 +167,15 @@ class AuthService:
 
         if not user:
             # Create new user
-            user_data = UserCreate(
-                email=email,
-                full_name=name,
-                google_id=google_id,
-                profile_picture=picture,
-                is_active=True,
-                email_verified=True  # Google emails are pre-verified
-            )
-            user = await self.create_user(user_data)
+            user_data = {
+                "email": email,
+                "full_name": name,
+                "google_id": google_id,
+                "profile_picture": picture,
+                "is_active": True,
+                "email_verified": True  # Google emails are pre-verified
+            }
+            user = await self.create_google_user(user_data)
         else:
             # Update Google ID and profile if not set or changed
             update_data = {}
@@ -76,19 +195,34 @@ class AuthService:
             "google_token": token
         }
 
-    async def create_user(self, user_data: UserCreate) -> User:
-        """Create new user"""
+    async def create_google_user(self, user_data: dict) -> User:
+        """Create new user for Google OAuth"""
         # Check if user already exists
-        existing_user = await self.user_db.get_user_by_email(user_data.email)
+        existing_user = await self.user_db.get_user_by_email(user_data["email"])
+        if existing_user:
+            raise ValueError("User with this email already exists")
+
+        # Create user data with timestamp
+        user_data["created_at"] = datetime.utcnow()
+        user_data["updated_at"] = datetime.utcnow()
+        
+        user = await self.user_db.create_user(user_data)
+        logger.info(f"Created new user via Google OAuth: {user.email}")
+        return user
+
+    async def create_user(self, user_data: dict) -> User:
+        """Create new user (legacy method)"""
+        # Check if user already exists
+        existing_user = await self.user_db.get_user_by_email(user_data["email"])
         if existing_user:
             raise ValueError("User with this email already exists")
 
         # Create user (exclude password field completely)
-        user_dict = user_data.dict(exclude={"password"})
-        user_dict["created_at"] = datetime.utcnow()
+        user_data["created_at"] = datetime.utcnow()
+        user_data["updated_at"] = datetime.utcnow()
         
-        user = await self.user_db.create_user(user_dict)
-        logger.info(f"Created new user via Google OAuth: {user.email}")
+        user = await self.user_db.create_user(user_data)
+        logger.info(f"Created new user: {user.email}")
         return user
 
     async def create_session(self, user: User, google_token: str) -> str:
@@ -98,6 +232,7 @@ class AuthService:
             "user_id": str(user.id),
             "user_email": user.email,
             "google_token": google_token,
+            "auth_type": "google",
             "created_at": datetime.utcnow(),
             "expires_at": datetime.utcnow() + timedelta(hours=24),  # 24 hour sessions
             "last_activity": datetime.utcnow()
@@ -109,20 +244,55 @@ class AuthService:
 
     async def get_current_user_by_session(self, session_id: str) -> Optional[User]:
         """Get current user from session ID"""
+        logger.info(f"🔍 Looking for session: {session_id}")
+        logger.info(f"🔍 Active sessions in memory: {list(self.active_sessions.keys())}")
+        
+        # First check in-memory
         session = self.active_sessions.get(session_id)
+        
+        # If not in memory, check database
         if not session:
+            try:
+                from app.config.database import get_database
+                db = await get_database()
+                session = await db.sessions.find_one({"session_id": session_id})
+                if session:
+                    logger.info(f"📀 Found session in database: {session_id}")
+                    # Add back to memory cache
+                    self.active_sessions[session_id] = session
+                else:
+                    logger.warning(f"❌ Session not found in database either: {session_id}")
+            except Exception as e:
+                logger.error(f"Failed to check database for session: {e}")
+        
+        if not session:
+            logger.warning(f"❌ Session not found anywhere")
             return None
 
         # Check if session is expired
-        if datetime.utcnow() > session["expires_at"]:
+        current_time = datetime.utcnow()
+        expires_at = session.get("expires_at")
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        
+        if current_time > expires_at:
+            logger.warning(f"❌ Session expired: {expires_at} < {current_time}")
             await self.invalidate_session(session_id)
             return None
 
         # Update last activity
-        session["last_activity"] = datetime.utcnow()
+        session["last_activity"] = current_time
+        self.active_sessions[session_id] = session  # Update memory cache
+        
+        logger.info(f"✅ Session found, user: {session['user_email']}")
         
         # Get user from database
         user = await self.user_db.get_user_by_email(session["user_email"])
+        if user:
+            logger.info(f"✅ User retrieved from database: {user.email}")
+        else:
+            logger.warning(f"❌ User not found in database: {session['user_email']}")
+        
         return user
 
     async def get_current_user_by_token(self, token: str) -> Optional[User]:
