@@ -3,6 +3,51 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { expenseService } from '../services/expenseService';
 import toast from 'react-hot-toast';
 
+// Helper function to extract error message from various error formats
+const getErrorMessage = (error) => {
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  if (error && typeof error === 'object') {
+    // Handle API response errors
+    if (error.response?.data) {
+      const responseData = error.response.data;
+      
+      // Handle validation errors from FastAPI/Pydantic
+      if (responseData.detail && Array.isArray(responseData.detail)) {
+        // Extract the first validation error message
+        const firstError = responseData.detail[0];
+        if (firstError && firstError.msg) {
+          return firstError.msg;
+        }
+        if (typeof firstError === 'string') {
+          return firstError;
+        }
+      }
+      
+      // Handle single detail message
+      if (typeof responseData.detail === 'string') {
+        return responseData.detail;
+      }
+      
+      // Handle other error formats
+      if (responseData.message) return responseData.message;
+      if (responseData.error) return responseData.error;
+    }
+    
+    // Handle direct error object properties
+    if (error.message) return error.message;
+    if (error.msg) return error.msg;
+    if (error.detail) return error.detail;
+    
+    // Last resort: stringify the error
+    return JSON.stringify(error);
+  }
+  
+  return 'An unknown error occurred';
+};
+
 export const useExpenses = (filters = {}) => {
   const queryClient = useQueryClient();
   const [localFilters, setLocalFilters] = useState(filters);
@@ -33,7 +78,8 @@ export const useExpenses = (filters = {}) => {
         toast.success('Expense created successfully!');
       },
       onError: (error) => {
-        const errorMessage = error.response?.data?.detail || 'Failed to create expense';
+        const errorMessage = getErrorMessage(error);
+        console.error('Create expense error:', error);
         toast.error(errorMessage);
       },
     }
@@ -49,7 +95,8 @@ export const useExpenses = (filters = {}) => {
         toast.success('Expense updated successfully!');
       },
       onError: (error) => {
-        const errorMessage = error.response?.data?.detail || 'Failed to update expense';
+        const errorMessage = getErrorMessage(error);
+        console.error('Update expense error:', error);
         toast.error(errorMessage);
       },
     }
@@ -65,7 +112,8 @@ export const useExpenses = (filters = {}) => {
         toast.success('Expense deleted successfully!');
       },
       onError: (error) => {
-        const errorMessage = error.response?.data?.detail || 'Failed to delete expense';
+        const errorMessage = getErrorMessage(error);
+        console.error('Delete expense error:', error);
         toast.error(errorMessage);
       },
     }
@@ -81,7 +129,8 @@ export const useExpenses = (filters = {}) => {
         toast.success(`${data.deletedCount} expenses deleted successfully!`);
       },
       onError: (error) => {
-        const errorMessage = error.response?.data?.detail || 'Failed to delete expenses';
+        const errorMessage = getErrorMessage(error);
+        console.error('Bulk delete error:', error);
         toast.error(errorMessage);
       },
     }
@@ -96,7 +145,8 @@ export const useExpenses = (filters = {}) => {
         toast.success(`${data.updatedCount} expenses updated successfully!`);
       },
       onError: (error) => {
-        const errorMessage = error.response?.data?.detail || 'Failed to update expenses';
+        const errorMessage = getErrorMessage(error);
+        console.error('Bulk update error:', error);
         toast.error(errorMessage);
       },
     }
@@ -118,7 +168,8 @@ export const useExpenses = (filters = {}) => {
         toast.success('Expenses exported successfully!');
       },
       onError: (error) => {
-        const errorMessage = error.response?.data?.detail || 'Failed to export expenses';
+        const errorMessage = getErrorMessage(error);
+        console.error('Export error:', error);
         toast.error(errorMessage);
       },
     }
@@ -135,12 +186,21 @@ export const useExpenses = (filters = {}) => {
   };
 
   // Helper functions
-  const createExpense = (expenseData) => {
-    return createExpenseMutation.mutate(expenseData);
+  const createExpense = async (expenseData) => {
+    try {
+      return await createExpenseMutation.mutateAsync(expenseData);
+    } catch (error) {
+      // Re-throw the error so it can be handled in the component
+      throw error;
+    }
   };
 
-  const updateExpense = (id, expenseData) => {
-    return updateExpenseMutation.mutate({ id, data: expenseData });
+  const updateExpense = async (id, expenseData) => {
+    try {
+      return await updateExpenseMutation.mutateAsync({ id, data: expenseData });
+    } catch (error) {
+      throw error;
+    }
   };
 
   const deleteExpense = (id) => {

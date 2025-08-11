@@ -34,6 +34,9 @@ const ExpenseList = () => {
     refetch 
   } = useExpenses(filters);
 
+  // Ensure expenses is always an array to prevent map errors
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
   };
@@ -63,7 +66,7 @@ const ExpenseList = () => {
 
   const handleSelectAll = (selected) => {
     if (selected) {
-      setSelectedExpenses(expenses.map(expense => expense.id));
+      setSelectedExpenses(safeExpenses.map(expense => expense.id));
     } else {
       setSelectedExpenses([]);
     }
@@ -209,7 +212,7 @@ const ExpenseList = () => {
           <div className="p-8">
             <Loading message="Loading expenses..." />
           </div>
-        ) : expenses.length === 0 ? (
+        ) : safeExpenses.length === 0 ? (
           <div className="p-8 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <MoreHorizontal className="w-8 h-8 text-gray-400" />
@@ -236,7 +239,7 @@ const ExpenseList = () => {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={selectedExpenses.length === expenses.length && expenses.length > 0}
+                  checked={selectedExpenses.length === safeExpenses.length && safeExpenses.length > 0}
                   onChange={(e) => handleSelectAll(e.target.checked)}
                   className="custom-checkbox mr-4"
                 />
@@ -252,7 +255,7 @@ const ExpenseList = () => {
             </div>
 
             {/* Expense Items */}
-            {expenses.map((expense) => (
+            {safeExpenses.map((expense) => (
               <ExpenseItem
                 key={expense.id}
                 expense={expense}

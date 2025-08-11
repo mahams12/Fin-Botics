@@ -25,6 +25,7 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
 
   const [errors, setErrors] = useState({});
   const [receiptPreview, setReceiptPreview] = useState(null);
+  const [submitError, setSubmitError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -36,6 +37,11 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    
+    // Clear submit error when user makes changes
+    if (submitError) {
+      setSubmitError('');
     }
   };
 
@@ -78,17 +84,43 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Helper function to extract error message from various error formats
+  const getErrorMessage = (error) => {
+    if (typeof error === 'string') {
+      return error;
+    }
+    if (error && typeof error === 'object') {
+      // Handle different error object structures
+      if (error.message) return error.message;
+      if (error.msg) return error.msg;
+      if (error.detail) return error.detail;
+      if (error.error) return error.error;
+      // If it's a validation error array, extract the first message
+      if (Array.isArray(error) && error.length > 0) {
+        const firstError = error[0];
+        if (typeof firstError === 'string') return firstError;
+        if (firstError.msg) return firstError.msg;
+        if (firstError.message) return firstError.message;
+      }
+      // Last resort: stringify the error
+      return JSON.stringify(error);
+    }
+    return 'An unknown error occurred';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) return;
 
     try {
+      setSubmitError(''); // Clear any previous submit errors
+      
       const expenseData = {
         amount: parseFloat(formData.amount),
         description: formData.description.trim(),
         category: formData.category,
-        date: formData.date,
+        date: formData.date + 'T00:00:00', // Convert date to datetime format
         vendor: formData.vendor.trim(),
         payment_method: formData.paymentMethod,
         tax_category: formData.taxCategory,
@@ -96,6 +128,10 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         billable: formData.billable,
       };
+
+      // Debug: Log the data being sent
+      console.log('Sending expense data:', expenseData);
+      console.log('Form data:', formData);
 
       if (isEditing) {
         await updateExpense(expense.id, expenseData);
@@ -107,6 +143,44 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
       if (onClose) onClose();
     } catch (error) {
       console.error('Error saving expense:', error);
+      
+      // Debug: Log the full error response
+      if (error.response) {
+        console.log('Error response data:', error.response.data);
+        console.log('Error response status:', error.response.status);
+        console.log('Error response headers:', error.response.headers);
+        
+        // Log the full detail array
+        if (error.response.data.detail) {
+          console.log('Full error detail:', JSON.stringify(error.response.data.detail, null, 2));
+        }
+      }
+      
+      // Handle API validation errors
+      if (error.response && error.response.data) {
+        const responseData = error.response.data;
+        
+        // If it's a validation error with field-specific errors
+        if (responseData.detail && Array.isArray(responseData.detail)) {
+          const fieldErrors = {};
+          responseData.detail.forEach(err => {
+            if (err.loc && err.loc.length > 1) {
+              const fieldName = err.loc[1]; // Usually the field name is at index 1
+              fieldErrors[fieldName] = getErrorMessage(err);
+            }
+          });
+          
+          if (Object.keys(fieldErrors).length > 0) {
+            setErrors(fieldErrors);
+            return;
+          }
+        }
+        
+        // General error message
+        setSubmitError(getErrorMessage(responseData));
+      } else {
+        setSubmitError(getErrorMessage(error));
+      }
     }
   };
 
@@ -130,6 +204,17 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* General Submit Error */}
+          {submitError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex">
+                <div className="text-sm text-red-700">
+                  {submitError}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Amount and Date */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -147,7 +232,7 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
                 className={`form-input ${errors.amount ? 'border-red-500' : ''}`}
                 placeholder="0.00"
               />
-              {errors.amount && <p className="form-error">{errors.amount}</p>}
+              {errors.amount && <p className="form-error">{getErrorMessage(errors.amount)}</p>}
             </div>
 
             <div>
@@ -162,7 +247,7 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
                 onChange={handleInputChange}
                 className={`form-input ${errors.date ? 'border-red-500' : ''}`}
               />
-              {errors.date && <p className="form-error">{errors.date}</p>}
+              {errors.date && <p className="form-error">{getErrorMessage(errors.date)}</p>}
             </div>
           </div>
 
@@ -180,7 +265,7 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
               className={`form-input ${errors.description ? 'border-red-500' : ''}`}
               placeholder="Office supplies, lunch meeting, etc."
             />
-            {errors.description && <p className="form-error">{errors.description}</p>}
+            {errors.description && <p className="form-error">{getErrorMessage(errors.description)}</p>}
           </div>
 
           {/* Category and Vendor */}
@@ -192,10 +277,16 @@ const ExpenseForm = ({ expense = null, onClose, onSuccess }) => {
               </label>
               <CategorySelector
                 value={formData.category}
-                onChange={(category) => setFormData(prev => ({ ...prev, category }))}
+                onChange={(category) => {
+                  setFormData(prev => ({ ...prev, category }));
+                  // Clear category error when selection changes
+                  if (errors.category) {
+                    setErrors(prev => ({ ...prev, category: '' }));
+                  }
+                }}
                 error={errors.category}
               />
-              {errors.category && <p className="form-error">{errors.category}</p>}
+              {errors.category && <p className="form-error">{getErrorMessage(errors.category)}</p>}
             </div>
 
             <div>

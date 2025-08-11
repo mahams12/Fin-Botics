@@ -1,6 +1,52 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 import { chatService } from '../services/chatService';
+import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
+
+// Helper function to extract error message from various error formats
+const getErrorMessage = (error) => {
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  if (error && typeof error === 'object') {
+    // Handle API response errors
+    if (error.response?.data) {
+      const responseData = error.response.data;
+      
+      // Handle validation errors from FastAPI/Pydantic
+      if (responseData.detail && Array.isArray(responseData.detail)) {
+        // Extract the first validation error message
+        const firstError = responseData.detail[0];
+        if (firstError && firstError.msg) {
+          return firstError.msg;
+        }
+        if (typeof firstError === 'string') {
+          return firstError;
+        }
+      }
+      
+      // Handle single detail message
+      if (typeof responseData.detail === 'string') {
+        return responseData.detail;
+      }
+      
+      // Handle other error formats
+      if (responseData.message) return responseData.message;
+      if (responseData.error) return responseData.error;
+    }
+    
+    // Handle direct error object properties
+    if (error.message) return error.message;
+    if (error.msg) return error.msg;
+    if (error.detail) return error.detail;
+    
+    // Last resort: stringify the error
+    return JSON.stringify(error);
+  }
+  
+  return 'An unknown error occurred';
+};
 
 // Initial state
 const initialState = {
@@ -115,6 +161,17 @@ const ChatContext = createContext();
 // Chat provider component
 export const ChatProvider = ({ children }) => {
   const [state, dispatch] = useReducer(chatReducer, initialState);
+  const { logout } = useAuth();
+
+  // Handle authentication errors
+  const handleAuthError = useCallback((error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.log('Authentication error in chat, logging out...');
+      logout();
+      return true; // Indicates auth error was handled
+    }
+    return false; // Not an auth error
+  }, [logout]);
 
   // Send message function
   const sendMessage = useCallback(async (messageText, attachments = []) => {
@@ -159,13 +216,20 @@ export const ChatProvider = ({ children }) => {
 
     } catch (error) {
       console.error('Send message error:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to send message';
+      
+      // Check if it's an authentication error
+      if (handleAuthError(error)) {
+        return; // Auth error handled, user will be redirected to login
+      }
+
+      // Handle other errors
+      const errorMessage = getErrorMessage(error);
       dispatch({ type: CHAT_ACTIONS.SET_ERROR, payload: errorMessage });
       toast.error(errorMessage);
     } finally {
       dispatch({ type: CHAT_ACTIONS.SET_TYPING, payload: false });
     }
-  }, [state.currentChatId]);
+  }, [state.currentChatId, handleAuthError]);
 
   // Load chat history
   const loadChatHistory = useCallback(async () => {
@@ -175,12 +239,18 @@ export const ChatProvider = ({ children }) => {
       dispatch({ type: CHAT_ACTIONS.SET_CHAT_HISTORY, payload: history });
     } catch (error) {
       console.error('Load chat history error:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to load chat history';
+      
+      // Check if it's an authentication error
+      if (handleAuthError(error)) {
+        return; // Auth error handled
+      }
+
+      const errorMessage = getErrorMessage(error);
       dispatch({ type: CHAT_ACTIONS.SET_ERROR, payload: errorMessage });
     } finally {
       dispatch({ type: CHAT_ACTIONS.SET_LOADING, payload: false });
     }
-  }, []);
+  }, [handleAuthError]);
 
   // Load specific chat
   const loadChat = useCallback(async (chatId) => {
@@ -191,13 +261,19 @@ export const ChatProvider = ({ children }) => {
       dispatch({ type: CHAT_ACTIONS.SET_CURRENT_CHAT, payload: chatId });
     } catch (error) {
       console.error('Load chat error:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to load chat';
+      
+      // Check if it's an authentication error
+      if (handleAuthError(error)) {
+        return; // Auth error handled
+      }
+
+      const errorMessage = getErrorMessage(error);
       dispatch({ type: CHAT_ACTIONS.SET_ERROR, payload: errorMessage });
       toast.error(errorMessage);
     } finally {
       dispatch({ type: CHAT_ACTIONS.SET_LOADING, payload: false });
     }
-  }, []);
+  }, [handleAuthError]);
 
   // Start new chat
   const startNewChat = useCallback(() => {
@@ -219,10 +295,16 @@ export const ChatProvider = ({ children }) => {
       toast.success('Chat deleted successfully');
     } catch (error) {
       console.error('Delete chat error:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to delete chat';
+      
+      // Check if it's an authentication error
+      if (handleAuthError(error)) {
+        return; // Auth error handled
+      }
+
+      const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
     }
-  }, [state.currentChatId]);
+  }, [state.currentChatId, handleAuthError]);
 
   // Clear error
   const clearError = useCallback(() => {

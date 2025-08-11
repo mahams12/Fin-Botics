@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 const initialState = {
   user: null,
   session_id: localStorage.getItem('session_id'), // Changed from token
+  google_token: localStorage.getItem('google_token'), // Store Google token separately
   loading: true,
   error: null,
   isAuthenticated: false,
@@ -47,22 +48,31 @@ const authReducer = (state, action) => {
     case AUTH_ACTIONS.LOGIN_SUCCESS:
       // Store session_id instead of token
       localStorage.setItem('session_id', action.payload.session_id);
+      
+      // Store Google token if available (for chat functionality)
+      if (action.payload.google_token) {
+        localStorage.setItem('google_token', action.payload.google_token);
+      }
+      
       return {
         ...state,
         user: action.payload.user,
         session_id: action.payload.session_id, // Changed from token
+        google_token: action.payload.google_token || state.google_token,
         isAuthenticated: true,
         loading: false,
         error: null,
       };
     case AUTH_ACTIONS.LOGOUT:
-      // Remove both token and session_id for compatibility
+      // Remove all tokens
       localStorage.removeItem('token');
       localStorage.removeItem('session_id');
+      localStorage.removeItem('google_token');
       return {
         ...state,
         user: null,
         session_id: null, // Changed from token
+        google_token: null,
         isAuthenticated: false,
         loading: false,
         error: null,
@@ -104,6 +114,7 @@ export const AuthProvider = ({ children }) => {
           console.error('Auth initialization error:', error);
           localStorage.removeItem('token');
           localStorage.removeItem('session_id');
+          localStorage.removeItem('google_token');
           dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: 'Session expired' });
         }
       } else {
@@ -149,11 +160,25 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       
+      console.log('Google token response:', tokenResponse); // Debug log
+      
+      // Store the actual Google access token for chat API
+      const googleToken = tokenResponse.access_token || tokenResponse.credential;
+      
       const response = await authService.googleLogin(tokenResponse);
-      dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: response });
+      
+      // Add the Google token to the response for storage
+      const responseWithGoogleToken = {
+        ...response,
+        google_token: googleToken
+      };
+      
+      console.log('Storing Google token for chat:', googleToken);
+      
+      dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: responseWithGoogleToken });
       
       toast.success('Successfully logged in with Google!');
-      return response;
+      return responseWithGoogleToken;
     } catch (error) {
       const errorMessage = error.response?.data?.detail || 'Google login failed';
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
