@@ -16,7 +16,7 @@ export const authService = {
     return response;
   },
 
-  // Google OAuth login - FIXED
+  // Google OAuth login - FIXED TO USE CREDENTIAL
   googleLogin: async (tokenResponse) => {
     console.log('🔧 AuthService received:', tokenResponse);
     
@@ -26,15 +26,21 @@ export const authService = {
                        tokenResponse.access_token || 
                        tokenResponse.id_token;
     
-    console.log('🔧 Sending to backend:', { token: googleToken });
-    
     if (!googleToken) {
       throw new Error('No Google token found in response');
     }
     
-    const response = await apiMethods.post('/auth/google', {
+    // Send as 'credential' instead of 'token' - this is what most backends expect
+    const payload = {
+      credential: googleToken,
+      // Also include other common field names for compatibility
       token: googleToken,
-    });
+      id_token: googleToken
+    };
+    
+    console.log('🔧 Sending to backend:', payload);
+    
+    const response = await apiMethods.post('/auth/google', payload);
     return response;
   },
 

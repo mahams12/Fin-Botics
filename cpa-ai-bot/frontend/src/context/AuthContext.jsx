@@ -154,46 +154,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google login function
-  const loginWithGoogle = async (tokenResponse) => {
+  // Google login function - SIMPLIFIED AND FIXED
+  const loginWithGoogle = async (googleResponse) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       
-      console.log('🔍 Google token response received:', tokenResponse);
+      console.log('🔍 Google response received:', googleResponse);
       
-      // Extract the actual Google token
-      const googleToken = tokenResponse.credential || tokenResponse.access_token || tokenResponse.id_token;
+      // Get the credential directly from Google's response
+      const googleCredential = googleResponse.credential;
       
-      console.log('🔍 Extracted Google token:', googleToken);
-      console.log('🔍 Token type:', typeof googleToken);
-      console.log('🔍 Token length:', googleToken?.length);
-      
-      if (!googleToken || googleToken === 'mock_google_token') {
-        throw new Error('No valid Google token received');
+      if (!googleCredential) {
+        throw new Error('No credential received from Google');
       }
       
-      // Send the actual Google credential to backend
-      const backendPayload = {
-        credential: googleToken,
-        token: googleToken,
-        // Include user info if available
-        user_info: tokenResponse.user || null
-      };
+      console.log('🔍 Google credential found:', googleCredential.substring(0, 50) + '...');
       
-      console.log('🚀 Sending to backend:', backendPayload);
-      
-      const response = await authService.googleLogin(backendPayload);
+      // Send to backend - let authService handle the formatting
+      const response = await authService.googleLogin(googleResponse);
       
       console.log('✅ Backend response:', response);
       
       // Add the Google token to the response for storage
       const responseWithGoogleToken = {
         ...response,
-        google_token: googleToken
+        google_token: googleCredential
       };
       
-      console.log('💾 Storing Google token for chat:', googleToken);
+      console.log('💾 Storing Google token for chat');
       
       dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: responseWithGoogleToken });
       
