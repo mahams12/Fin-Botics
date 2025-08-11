@@ -198,14 +198,39 @@ export const ChatProvider = ({ children }) => {
         attachments,
       });
 
+      // DEBUG: Log the entire response to see its structure
+      console.log('🔍 Full API response:', response);
+      console.log('🔍 Response keys:', Object.keys(response));
+      console.log('🔍 Response.message:', response.message);
+      console.log('🔍 Response.response:', response.response);
+      console.log('🔍 Response.content:', response.content);
+      console.log('🔍 Response.text:', response.text);
+      console.log('🔍 Response.ai_response:', response.ai_response);
+      console.log('🔍 Response.data:', response.data);
+
+      // Try different possible field names for the AI message
+      const aiMessageText = response.message || 
+                            response.response || 
+                            response.content || 
+                            response.text || 
+                            response.ai_response ||
+                            response.data?.message ||
+                            response.data?.response ||
+                            response.data?.content ||
+                            'No response received from AI';
+
+      console.log('🤖 AI message text extracted:', aiMessageText);
+
       // Add bot response
       const botMessage = {
-        id: response.messageId || (Date.now() + 1).toString(),
-        text: response.message,
+        id: response.messageId || response.id || response.data?.id || (Date.now() + 1).toString(),
+        text: aiMessageText,
         sender: 'bot',
-        timestamp: response.timestamp || new Date().toISOString(),
-        suggestions: response.suggestions || [],
+        timestamp: response.timestamp || response.data?.timestamp || new Date().toISOString(),
+        suggestions: response.suggestions || response.data?.suggestions || [],
       };
+
+      console.log('🤖 Bot message to add:', botMessage);
 
       dispatch({ type: CHAT_ACTIONS.ADD_MESSAGE, payload: botMessage });
 
@@ -214,8 +239,10 @@ export const ChatProvider = ({ children }) => {
         dispatch({ type: CHAT_ACTIONS.SET_CURRENT_CHAT, payload: response.chatId });
       }
 
+      console.log('✅ Message sent successfully');
+
     } catch (error) {
-      console.error('Send message error:', error);
+      console.error('❌ Send message error:', error);
       
       // Check if it's an authentication error
       if (handleAuthError(error)) {
