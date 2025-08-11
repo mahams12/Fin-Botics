@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 from app.services.expense_service import ExpenseService
 from app.schemas.expense_schema import (
     ExpenseCreateRequest, ExpenseFromTextRequest, ExpenseUpdateRequest,
@@ -9,6 +9,7 @@ from app.schemas.expense_schema import (
 from app.api.deps import get_current_active_user
 from app.models.user import User
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -84,29 +85,73 @@ async def create_expense_from_text(
             detail="Failed to process expense text"
         )
 
+def parse_frontend_date(date_string: str) -> date:
+    """Parse various date formats from frontend"""
+    try:
+        import urllib.parse
+        
+        # URL decode the string
+        decoded = urllib.parse.unquote(date_string)
+        logger.info(f"Parsing date string: {decoded}")
+        
+        # Handle different date formats
+        
+        # Format 1: ISO date strings (YYYY-MM-DD)
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', decoded):
+            return datetime.fromisoformat(decoded).date()
+        
+        # Format 2: JavaScript Date toString() format
+        # "Fri Aug 01 2025 00:00:00 GMT+0500 (Pakistan Standard Time)"
+        if 'GMT' in decoded:
+            # Remove timezone info and parse
+            clean_date = re.sub(r' GMT[+\-]\d{4} \([^)]+\)', '', decoded)
+            try:
+                parsed_dt = datetime.strptime(clean_date, "%a %b %d %Y %H:%M:%S")
+                return parsed_dt.date()
+            except ValueError:
+                pass
+        
+        # Format 3: ISO datetime strings
+        if 'T' in decoded:
+            # Remove timezone info if present
+            clean_date = re.sub(r'[+\-]\d{2}:\d{2}$', '', decoded)
+            clean_date = clean_date.replace('Z', '')
+            try:
+                parsed_dt = datetime.fromisoformat(clean_date)
+                return parsed_dt.date()
+            except ValueError:
+                pass
+        
+        # Format 4: Try direct datetime parsing
+        try:
+            parsed_dt = datetime.fromisoformat(decoded.replace(' GMT+0500 (Pakistan Standard Time)', '+05:00'))
+            return parsed_dt.date()
+        except ValueError:
+            pass
+        
+        # If all else fails, try to parse as datetime
+        parsed_dt = datetime.strptime(decoded, "%Y-%m-%d")
+        return parsed_dt.date()
+        
+    except Exception as e:
+        logger.error(f"Failed to parse date '{date_string}': {e}")
+        raise ValueError(f"Invalid date format: {date_string}")
+
 @router.get("/stats")
 async def get_expense_stats(
-    start: str = Query(..., description="Start date in ISO format"),
-    end: str = Query(..., description="End date in ISO format"),
+    start: str = Query(..., description="Start date"),
+    end: str = Query(..., description="End date"),
     current_user: User = Depends(get_current_active_user)
 ):
     """Get expense statistics for a date range"""
     try:
-        from datetime import datetime
-        import urllib.parse
+        logger.info(f"Getting expense stats from {start} to {end}")
         
-        # Parse the URL-encoded date strings
-        start_decoded = urllib.parse.unquote(start)
-        end_decoded = urllib.parse.unquote(end)
+        # Parse the date strings
+        start_date = parse_frontend_date(start)
+        end_date = parse_frontend_date(end)
         
-        # Convert to datetime objects
-        # Handle the GMT+0500 (Pakistan Standard Time) format
-        start_date = datetime.fromisoformat(start_decoded.replace(' GMT+0500 (Pakistan Standard Time)', '+05:00'))
-        end_date = datetime.fromisoformat(end_decoded.replace(' GMT+0500 (Pakistan Standard Time)', '+05:00'))
-        
-        # Convert to date objects for the service
-        start_date = start_date.date()
-        end_date = end_date.date()
+        logger.info(f"Parsed dates: {start_date} to {end_date}")
         
         # Get expense statistics from service
         stats = await expense_service.get_expense_stats(
@@ -118,10 +163,10 @@ async def get_expense_stats(
         return stats
         
     except ValueError as e:
-        logger.error(f"Error parsing date parameters: {e}")
+        logger.error(f"Date parsing error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format"
+            detail=f"Invalid date format: {str(e)}"
         )
     except Exception as e:
         logger.error(f"Error getting expense stats: {e}")

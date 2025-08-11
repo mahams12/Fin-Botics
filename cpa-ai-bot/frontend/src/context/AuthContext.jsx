@@ -160,12 +160,32 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       
-      console.log('Google token response:', tokenResponse); // Debug log
+      console.log('🔍 Google token response received:', tokenResponse);
       
-      // Store the actual Google access token for chat API
-      const googleToken = tokenResponse.access_token || tokenResponse.credential;
+      // Extract the actual Google token
+      const googleToken = tokenResponse.credential || tokenResponse.access_token || tokenResponse.id_token;
       
-      const response = await authService.googleLogin(tokenResponse);
+      console.log('🔍 Extracted Google token:', googleToken);
+      console.log('🔍 Token type:', typeof googleToken);
+      console.log('🔍 Token length:', googleToken?.length);
+      
+      if (!googleToken || googleToken === 'mock_google_token') {
+        throw new Error('No valid Google token received');
+      }
+      
+      // Send the actual Google credential to backend
+      const backendPayload = {
+        credential: googleToken,
+        token: googleToken,
+        // Include user info if available
+        user_info: tokenResponse.user || null
+      };
+      
+      console.log('🚀 Sending to backend:', backendPayload);
+      
+      const response = await authService.googleLogin(backendPayload);
+      
+      console.log('✅ Backend response:', response);
       
       // Add the Google token to the response for storage
       const responseWithGoogleToken = {
@@ -173,14 +193,16 @@ export const AuthProvider = ({ children }) => {
         google_token: googleToken
       };
       
-      console.log('Storing Google token for chat:', googleToken);
+      console.log('💾 Storing Google token for chat:', googleToken);
       
       dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: responseWithGoogleToken });
       
       toast.success('Successfully logged in with Google!');
       return responseWithGoogleToken;
     } catch (error) {
-      const errorMessage = error.response?.data?.detail || 'Google login failed';
+      console.error('❌ Google login error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.detail || error.message || 'Google login failed';
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       toast.error(errorMessage);
       throw error;

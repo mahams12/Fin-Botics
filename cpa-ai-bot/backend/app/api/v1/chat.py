@@ -5,7 +5,8 @@ from app.schemas.chat_schema import (
     ChatMessageRequest, ChatMessageResponse, 
     ChatSessionResponse, ChatHistoryResponse
 )
-from app.api.deps import get_current_active_user_by_token
+# FIXED: Use session-based auth instead of Google token auth
+from app.api.deps import get_current_active_user
 from app.models.user import User
 import logging
 
@@ -16,10 +17,12 @@ chat_service = ChatService()
 @router.post("/message", response_model=ChatMessageResponse)
 async def send_message(
     request: ChatMessageRequest,
-    current_user: User = Depends(get_current_active_user_by_token)
+    # FIXED: Changed from get_current_active_user_by_token to get_current_active_user
+    current_user: User = Depends(get_current_active_user)
 ):
     """Send a message to the AI bot"""
     try:
+        logger.info(f"Chat message request from user {current_user.id}: {request.message[:50]}...")
         user_id = str(current_user.id)
         
         # Create new session if none provided
@@ -43,6 +46,8 @@ async def send_message(
             request.message
         )
         
+        logger.info(f"Chat response generated for user {current_user.id}")
+        
         return ChatMessageResponse(
             response=result["response"],
             type=result["type"],
@@ -61,7 +66,8 @@ async def send_message(
 
 @router.get("/sessions", response_model=List[ChatSessionResponse])
 async def get_chat_sessions(
-    current_user: User = Depends(get_current_active_user_by_token)
+    # FIXED: Changed from get_current_active_user_by_token to get_current_active_user
+    current_user: User = Depends(get_current_active_user)
 ):
     """Get user's chat sessions"""
     try:
@@ -88,7 +94,8 @@ async def get_chat_sessions(
 @router.get("/sessions/{chat_session_id}/history", response_model=ChatHistoryResponse)
 async def get_chat_history(
     chat_session_id: str,
-    current_user: User = Depends(get_current_active_user_by_token)
+    # FIXED: Changed from get_current_active_user_by_token to get_current_active_user
+    current_user: User = Depends(get_current_active_user)
 ):
     """Get chat history for a session"""
     try:
@@ -128,7 +135,8 @@ async def get_chat_history(
 @router.post("/sessions", response_model=ChatSessionResponse)
 async def create_chat_session(
     title: str = Query(default="New Chat"),
-    current_user: User = Depends(get_current_active_user_by_token)
+    # FIXED: Changed from get_current_active_user_by_token to get_current_active_user
+    current_user: User = Depends(get_current_active_user)
 ):
     """Create a new chat session"""
     try:
@@ -152,7 +160,8 @@ async def create_chat_session(
 @router.delete("/sessions/{chat_session_id}")
 async def delete_chat_session(
     chat_session_id: str,
-    current_user: User = Depends(get_current_active_user_by_token)
+    # FIXED: Changed from get_current_active_user_by_token to get_current_active_user
+    current_user: User = Depends(get_current_active_user)
 ):
     """Delete a chat session"""
     try:

@@ -16,10 +16,24 @@ export const authService = {
     return response;
   },
 
-  // Google OAuth login
+  // Google OAuth login - FIXED
   googleLogin: async (tokenResponse) => {
+    console.log('🔧 AuthService received:', tokenResponse);
+    
+    // Extract the Google token from various possible fields
+    const googleToken = tokenResponse.credential || 
+                       tokenResponse.token || 
+                       tokenResponse.access_token || 
+                       tokenResponse.id_token;
+    
+    console.log('🔧 Sending to backend:', { token: googleToken });
+    
+    if (!googleToken) {
+      throw new Error('No Google token found in response');
+    }
+    
     const response = await apiMethods.post('/auth/google', {
-      token: tokenResponse.access_token,
+      token: googleToken,
     });
     return response;
   },
@@ -33,6 +47,8 @@ export const authService = {
       console.error('Logout error:', error);
     }
     localStorage.removeItem('token');
+    localStorage.removeItem('session_id');
+    localStorage.removeItem('google_token');
   },
 
   // Get current user

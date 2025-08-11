@@ -24,6 +24,8 @@ class ExpenseService:
     async def create_expense_from_text(self, user_id: str, text: str) -> Dict[str, Any]:
         """Create expense from natural language text"""
         try:
+            logger.info(f"Creating expense from text for user {user_id}: {text}")
+            
             # Parse expense from text
             parsed_data = await self.ai_service.parse_expense_from_text(text)
             
@@ -31,7 +33,7 @@ class ExpenseService:
                 return {
                     "success": False,
                     "error": "Could not extract expense information from text",
-                    "suggestion": "Please provide amount and description clearly"
+                    "suggestion": "Please provide amount and description clearly. Example: 'I spent $50 on office supplies'"
                 }
 
             # Categorize the expense
@@ -45,11 +47,14 @@ class ExpenseService:
                 description=parsed_data['description'],
                 amount=parsed_data['amount'],
                 category=categorization['category'],
-                date=datetime.utcnow()
+                date=datetime.utcnow(),
+                notes=f"Created from text: {text}"
             )
 
             expense = await self.create_expense(user_id, expense_data)
 
+            logger.info(f"Expense created successfully from text for user {user_id}")
+            
             return {
                 "success": True,
                 "expense": expense,
@@ -61,7 +66,8 @@ class ExpenseService:
             return {
                 "success": False,
                 "error": "Failed to process expense",
-                "details": str(e)
+                "details": str(e),
+                "suggestion": "Please try with a clearer format like 'I paid $25 for lunch'"
             }
 
     async def get_user_expenses(
@@ -115,34 +121,98 @@ class ExpenseService:
 
         return await self.expense_db.delete_expense(expense_id)
 
-    async def get_expense_summary(self, user_id: str, start_date: date, end_date: date) -> Dict[str, Any]:
-        """Get expense summary for date range"""
-        expenses = await self.get_user_expenses(
-            user_id=user_id,
-            start_date=start_date,
-            end_date=end_date,
-            limit=1000  # Get all expenses for the period
-        )
-
-        # Calculate totals by category
-        category_totals = {}
-        total_amount = 0
-
-        for expense in expenses:
-            category = expense.category
-            amount = expense.amount
+    async def get_expense_stats(self, user_id: str, start_date: date, end_date: date) -> Dict[str, Any]:
+        """Get comprehensive expense statistics for date range"""
+        try:
+            logger.info(f"Getting expense stats for user {user_id} from {start_date} to {end_date}")
             
-            if category not in category_totals:
-                category_totals[category] = 0
-            category_totals[category] += amount
-            total_amount += amount
+            expenses = await self.get_user_expenses(
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date,
+                limit=1000  # Get all expenses for the period
+            )
 
-        return {
-            "total_expenses": total_amount,
-            "expense_count": len(expenses),
-            "category_breakdown": category_totals,
-            "date_range": {
-                "start": start_date.isoformat(),
-                "end": end_date.isoformat()
+            # Calculate totals by category
+            category_totals = {}
+            total_amount = 0
+            monthly_totals = {}
+
+            for expense in expenses:
+                category = expense.category
+                amount = float(expense.amount)
+                expense_date = expense.date
+                
+                # Category totals
+                if category not in category_totals:
+                    category_totals[category] = 0
+                category_totals[category] += amount
+                total_amount += amount
+                
+                # Monthly totals
+                month_key = expense_date.strftime('%Y-%m')
+                if month_key not in monthly_totals:
+                    monthly_totals[month_key] = 0
+                monthly_totals[month_key] += amount
+
+            # Calculate averages
+            days_in_period = (end_date - start_date).days + 1
+            avg_daily = total_amount / days_in_period if days_in_period > 0 else 0
+            avg_expense = total_amount / len(expenses) if expenses else 0
+
+            # Find top categories
+            sorted_categories = sorted(category_totals.items(), key=lambda x: x[1], reverse=True)
+            top_categories = sorted_categories[:5]
+
+            stats = {
+                "summary": {
+                    "total_expenses": round(total_amount, 2),
+                    "expense_count": len(expenses),
+                    "average_daily": round(avg_daily, 2),
+                    "average_expense": round(avg_expense, 2)
+                },
+                "category_breakdown": {
+                    category: round(amount, 2) 
+                    for category, amount in category_totals.items()
+                },
+                "top_categories": [
+                    {"category": cat, "amount": round(amount, 2)} 
+                    for cat, amount in top_categories
+                ],
+                "monthly_totals": {
+                    month: round(amount, 2) 
+                    for month, amount in monthly_totals.items()
+                },
+                "date_range": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                    "days": days_in_period
+                }
             }
-        }
+
+            logger.info(f"Expense stats calculated for user {user_id}: {stats['summary']}")
+            return stats
+
+        except Exception as e:
+            logger.error(f"Error calculating expense stats: {e}")
+            # Return empty stats instead of raising error
+            return {
+                "summary": {
+                    "total_expenses": 0,
+                    "expense_count": 0,
+                    "average_daily": 0,
+                    "average_expense": 0
+                },
+                "category_breakdown": {},
+                "top_categories": [],
+                "monthly_totals": {},
+                "date_range": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                    "days": (end_date - start_date).days + 1
+                }
+            }
+
+    async def get_expense_summary(self, user_id: str, start_date: date, end_date: date) -> Dict[str, Any]:
+        """Get expense summary for date range (backward compatibility)"""
+        return await self.get_expense_stats(user_id, start_date, end_date)
