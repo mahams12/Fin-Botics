@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from app.services.auth_service import AuthService
 from app.schemas.auth_schema import GoogleAuthRequest, TokenResponse, LogoutRequest, AuthStatusResponse
 from app.schemas.user_schema import UserCreateRequest, UserResponse
+from app.models.user import UserUpdate
 from app.api.deps import get_current_active_user_by_session
 import logging
 
@@ -304,3 +305,78 @@ async def auth_status(session_id: str = None):
             user=None,
             session_expires_at=None
         )
+
+@router.put("/profile")
+async def update_profile(
+    profile_data: UserUpdate,
+    session_id: str = Query(..., description="User session ID")
+):
+    """
+    Update user profile information
+    """
+    try:
+        # Verify session and get user
+        user = await auth_service.get_current_user_by_session(session_id)
+        if not user:
+            logger.warning(f"Invalid session ID: {session_id}")
+            raise HTTPException(status_code=404, detail="Invalid session")
+        
+        # Update user profile using auth service
+        updated_user = await auth_service.update_user_profile(
+            user_id=user.id,
+            profile_data=profile_data
+        )
+        
+        if not updated_user:
+            logger.error(f"Failed to update profile for user: {user.id}")
+            raise HTTPException(status_code=400, detail="Failed to update profile")
+        
+        logger.info(f"Profile updated successfully for user: {user.id}")
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "data": {
+                "id": str(updated_user.id),
+                "email": updated_user.email,
+                "full_name": updated_user.full_name,
+                "is_active": updated_user.is_active,
+                "google_id": getattr(updated_user, 'google_id', None),
+                "profile_picture": getattr(updated_user, 'profile_picture', None)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/profile")
+async def get_profile(
+    session_id: str = Query(..., description="User session ID")
+):
+    """
+    Get user profile information
+    """
+    try:
+        user = await auth_service.get_current_user_by_session(session_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Invalid session")
+        
+        return {
+            "success": True,
+            "data": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+                "google_id": getattr(user, 'google_id', None),
+                "profile_picture": getattr(user, 'profile_picture', None)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -1,9 +1,9 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-// Create axios instance
+// Create axios instance - FIXED: Remove /api/v1 from baseURL
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080/api/v1', // Updated port
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000', // ✅ FIXED: No /api/v1 suffix
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -135,12 +135,15 @@ export const apiMethods = {
     }).then(response => response.data);
   },
 
-  // Download file
+  // Download file - ENHANCED for better blob handling
   download: (url, config = {}) => {
     return api.get(url, {
       ...config,
       responseType: 'blob',
-    }).then(response => response.data);
+    }).then(response => {
+      // Return the raw response for blob handling
+      return response;
+    });
   },
 };
 

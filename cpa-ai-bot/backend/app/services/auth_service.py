@@ -244,6 +244,37 @@ class AuthService:
         logger.info(f"Created new user: {user.email}")
         return user
 
+    async def update_user_profile(self, user_id, profile_data):
+        """Update user profile information"""
+        try:
+            # Prepare update data
+            update_data = {}
+            if hasattr(profile_data, 'full_name') and profile_data.full_name is not None:
+                update_data["full_name"] = profile_data.full_name
+            if hasattr(profile_data, 'is_active') and profile_data.is_active is not None:
+                update_data["is_active"] = profile_data.is_active
+            if hasattr(profile_data, 'profile_picture') and profile_data.profile_picture is not None:
+                update_data["profile_picture"] = profile_data.profile_picture
+            
+            # Add updated timestamp
+            update_data["updated_at"] = datetime.utcnow()
+            
+            logger.info(f"Updating user profile for user_id: {user_id} with data: {update_data}")
+            
+            # Update user in database using the existing user_db instance
+            updated_user = await self.user_db.update_user(user_id, update_data)
+            
+            if updated_user:
+                logger.info(f"Successfully updated profile for user: {updated_user.email}")
+            else:
+                logger.warning(f"No user returned from update operation for user_id: {user_id}")
+                
+            return updated_user
+            
+        except Exception as e:
+            logger.error(f"Error updating user profile: {e}")
+            raise
+
     async def create_session(self, user: User, google_token: str) -> str:
         """Create a new session for the user"""
         session_id = str(uuid.uuid4())
