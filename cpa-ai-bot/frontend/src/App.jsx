@@ -12,7 +12,8 @@ import ChatPage from './pages/ChatPage';
 import ExpensesPage from './pages/ExpensesPage';
 import ReportsPage from './pages/ReportsPage';
 import ProfilePage from './pages/ProfilePage';
-import SettingsPage from './pages/SettingsPage'; // ADD THIS LINE
+import SettingsPage from './pages/SettingsPage';
+import NotificationsPage from './pages/NotificationsPage'; // ADD THIS LINE
 
 // Components
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -32,7 +33,7 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Routes>
         {/* Public Routes */}
         <Route 
@@ -90,6 +91,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

@@ -5,13 +5,15 @@ from contextlib import asynccontextmanager
 import logging
 import os
 
-# Import routers
-from app.api.v1.auth import router as auth_router
-from app.api.v1.users import router as users_router
-from app.api.v1.expenses import router as expenses_router
-from app.api.v1.chat import router as chat_router
-from app.api.v1.reports import router as reports_router
-from app.api.v1.admin import router as admin_router
+# Import routers from the v1 package
+from app.api.v1 import (
+    auth_router,
+    users_router,
+    expenses_router,
+    chat_router,
+    reports_router,
+    admin_router
+)
 
 # Import config
 from app.config.settings import settings
@@ -25,8 +27,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up CPA AI Bot API...")
-    await connect_to_mongo()
-    logger.info("Database connected successfully")
+    try:
+        await connect_to_mongo()
+        logger.info("Database connected successfully")
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
     
     # Create upload directories
     upload_dirs = [
@@ -43,8 +48,11 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down CPA AI Bot API...")
-    await close_mongo_connection()
-    logger.info("Database connection closed")
+    try:
+        await close_mongo_connection()
+        logger.info("Database connection closed")
+    except Exception as e:
+        logger.error(f"Error closing database connection: {e}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -68,13 +76,28 @@ app.add_middleware(
 # Mount static files for serving uploaded images
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
-# Include routers
+# Include routers with logging
+logger.info("Including API routers...")
+
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+logger.info("✓ Auth router included")
+
 app.include_router(users_router, prefix="/api/v1/users", tags=["Users"])
+logger.info("✓ Users router included")
+
 app.include_router(expenses_router, prefix="/api/v1/expenses", tags=["Expenses"])
+logger.info("✓ Expenses router included")
+
 app.include_router(chat_router, prefix="/api/v1/chat", tags=["Chat"])
+logger.info("✓ Chat router included")
+
 app.include_router(reports_router, prefix="/api/v1/reports", tags=["Reports"])
+logger.info("✓ Reports router included")
+
 app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
+logger.info("✓ Admin router included")
+
+logger.info("All routers included successfully!")
 
 @app.get("/")
 async def root():
@@ -92,3 +115,22 @@ async def health_check():
         "status": "healthy",
         "service": settings.APP_NAME
     }
+
+@app.get("/api/test")
+async def test_endpoint():
+    """Test endpoint to verify API is working"""
+    return {"message": "API is working", "timestamp": "2025-01-01"}
+
+# Add this for debugging - remove in production
+if settings.DEBUG:
+    @app.get("/debug/routes")
+    async def debug_routes():
+        """Debug endpoint to see all registered routes"""
+        routes = []
+        for route in app.routes:
+            if hasattr(route, 'methods') and hasattr(route, 'path'):
+                routes.append({
+                    "path": route.path,
+                    "methods": list(route.methods)
+                })
+        return routes

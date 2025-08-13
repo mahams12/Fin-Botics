@@ -3,10 +3,12 @@ import { Calendar, Download, TrendingUp, TrendingDown, Target, Award } from 'luc
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
+import { reportService } from '../../services/reportService'; // ADD THIS IMPORT
 
 const AnnualReport = () => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [isDownloading, setIsDownloading] = useState(false); // ADD THIS STATE
 
   // Mock data - replace with actual API call
   const annualData = {
@@ -56,8 +58,32 @@ const AnnualReport = () => {
     ],
   };
 
-  const handleDownload = () => {
-    console.log('Downloading annual report...');
+  // REPLACE THE OLD handleDownload FUNCTION WITH THIS:
+  const handleDownload = async () => {
+    if (isDownloading) return;
+    
+    setIsDownloading(true);
+    try {
+      console.log('🔧 Starting annual report download...');
+      
+      // Create date range for the selected year
+      const start_date = `${selectedYear}-01-01`;
+      const end_date = `${selectedYear}-12-31`;
+      
+      // Use the downloadReport method for annual reports
+      await reportService.downloadReport('financial_summary', 'pdf', {
+        start_date,
+        end_date
+      });
+      
+      console.log('✅ Annual report download completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Annual report download failed:', error);
+      alert('Failed to download annual report. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -84,9 +110,14 @@ const AnnualReport = () => {
             ))}
           </select>
           
-          <Button onClick={handleDownload} variant="outline">
+          {/* UPDATE THE BUTTON WITH LOADING STATE */}
+          <Button 
+            onClick={handleDownload} 
+            variant="outline"
+            disabled={isDownloading}
+          >
             <Download className="w-4 h-4 mr-2" />
-            Download PDF
+            {isDownloading ? 'Downloading...' : 'Download PDF'}
           </Button>
         </div>
       </div>

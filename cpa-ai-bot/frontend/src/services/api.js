@@ -29,6 +29,10 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // DEBUG: Log the final URL being requested
+    const fullUrl = config.baseURL + config.url + (config.params ? '?' + new URLSearchParams(config.params).toString() : '');
+    console.log('Full API Request URL:', fullUrl);
+    
     return config;
   },
   (error) => {
@@ -58,8 +62,8 @@ api.interceptors.response.use(
           toast.error('You do not have permission to perform this action.');
           break;
         case 404:
-          // Not found
-          toast.error('The requested resource was not found.');
+          // Not found - Don't show toast for 404s as they're handled by fallback
+          console.warn('API endpoint not found:', error.config?.url);
           break;
         case 422:
           // Validation error
@@ -87,10 +91,10 @@ api.interceptors.response.use(
       }
     } else if (error.request) {
       // Network error
-      toast.error('Network error. Please check your connection.');
+      console.warn('Network error:', error.message);
     } else {
       // Other error
-      toast.error('An unexpected error occurred.');
+      console.warn('Request error:', error.message);
     }
 
     return Promise.reject(error);
@@ -164,9 +168,19 @@ export const buildQueryString = (params) => {
   return searchParams.toString();
 };
 
+// FIXED buildUrl function - now handles URL construction properly
 export const buildUrl = (endpoint, params = {}) => {
+  // Ensure endpoint starts with / but doesn't double up
+  let url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  // Build query parameters
   const queryString = buildQueryString(params);
-  return queryString ? `${endpoint}?${queryString}` : endpoint;
+  
+  // Combine URL and query string
+  const finalUrl = queryString ? `${url}?${queryString}` : url;
+  
+  console.log('buildUrl result:', finalUrl); // Debug log
+  return finalUrl;
 };
 
 // Export the axios instance for advanced usage

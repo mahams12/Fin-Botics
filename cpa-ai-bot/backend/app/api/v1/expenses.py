@@ -40,6 +40,108 @@ async def create_expense(
         logger.error(f"Error creating expense: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve expenses"
+        )
+
+@router.get("/{expense_id}", response_model=ExpenseResponse)
+async def get_expense(
+    expense_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get expense by ID"""
+    expense = await expense_service.get_expense_by_id(expense_id, str(current_user.id))
+    
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense not found"
+        )
+    
+    return ExpenseResponse(
+        id=str(expense.id),
+        description=expense.description,
+        amount=expense.amount,
+        category=expense.category,
+        date=expense.date,
+        notes=expense.notes,
+        created_at=expense.created_at
+    )
+
+@router.put("/{expense_id}", response_model=ExpenseResponse)
+async def update_expense(
+    expense_id: str,
+    request: ExpenseUpdateRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update expense"""
+    update_data = {k: v for k, v in request.dict().items() if v is not None}
+    
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No data provided for update"
+        )
+    
+    expense = await expense_service.update_expense(
+        expense_id, 
+        str(current_user.id), 
+        update_data
+    )
+    
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense not found"
+        )
+    
+    return ExpenseResponse(
+        id=str(expense.id),
+        description=expense.description,
+        amount=expense.amount,
+        category=expense.category,
+        date=expense.date,
+        notes=expense.notes,
+        created_at=expense.created_at
+    )
+
+@router.delete("/{expense_id}")
+async def delete_expense(
+    expense_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete expense"""
+    success = await expense_service.delete_expense(expense_id, str(current_user.id))
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense not found"
+        )
+    
+    return {"message": "Expense deleted successfully"}
+
+@router.post("/bulk-delete")
+async def bulk_delete_expenses(
+    expense_ids: List[str],
+    current_user: User = Depends(get_current_active_user)
+):
+    """Bulk delete expenses"""
+    try:
+        deleted_count = 0
+        for expense_id in expense_ids:
+            success = await expense_service.delete_expense(expense_id, str(current_user.id))
+            if success:
+                deleted_count += 1
+        
+        return {"deletedCount": deleted_count}
+        
+    except Exception as e:
+        logger.error(f"Error bulk deleting expenses: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete expenses"
+        )(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create expense"
         )
 
@@ -180,22 +282,42 @@ async def get_expenses(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
     category: Optional[str] = Query(None),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     current_user: User = Depends(get_current_active_user)
 ):
     """Get user's expenses with filters"""
     try:
         skip = (page - 1) * per_page
         
+        # Parse date strings if provided
+        parsed_start_date = None
+        parsed_end_date = None
+        
+        if start_date:
+            try:
+                parsed_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError:
+                logger.warning(f"Invalid start_date format: {start_date}")
+        
+        if end_date:
+            try:
+                parsed_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                logger.warning(f"Invalid end_date format: {end_date}")
+        
+        logger.info(f"Getting expenses for user {current_user.id} with filters: category={category}, start_date={parsed_start_date}, end_date={parsed_end_date}")
+        
         expenses = await expense_service.get_user_expenses(
             user_id=str(current_user.id),
             limit=per_page,
             skip=skip,
             category=category,
-            start_date=start_date,
-            end_date=end_date
+            start_date=parsed_start_date,
+            end_date=parsed_end_date
         )
+        
+        logger.info(f"Found {len(expenses)} expenses")
         
         expense_responses = [
             ExpenseResponse(
@@ -219,84 +341,4 @@ async def get_expenses(
         
     except Exception as e:
         logger.error(f"Error getting expenses: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve expenses"
-        )
-
-@router.get("/{expense_id}", response_model=ExpenseResponse)
-async def get_expense(
-    expense_id: str,
-    current_user: User = Depends(get_current_active_user)
-):
-    """Get expense by ID"""
-    expense = await expense_service.get_expense_by_id(expense_id, str(current_user.id))
-    
-    if not expense:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
-    
-    return ExpenseResponse(
-        id=str(expense.id),
-        description=expense.description,
-        amount=expense.amount,
-        category=expense.category,
-        date=expense.date,
-        notes=expense.notes,
-        created_at=expense.created_at
-    )
-
-@router.put("/{expense_id}", response_model=ExpenseResponse)
-async def update_expense(
-    expense_id: str,
-    request: ExpenseUpdateRequest,
-    current_user: User = Depends(get_current_active_user)
-):
-    """Update expense"""
-    update_data = {k: v for k, v in request.dict().items() if v is not None}
-    
-    if not update_data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No data provided for update"
-        )
-    
-    expense = await expense_service.update_expense(
-        expense_id, 
-        str(current_user.id), 
-        update_data
-    )
-    
-    if not expense:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
-    
-    return ExpenseResponse(
-        id=str(expense.id),
-        description=expense.description,
-        amount=expense.amount,
-        category=expense.category,
-        date=expense.date,
-        notes=expense.notes,
-        created_at=expense.created_at
-    )
-
-@router.delete("/{expense_id}")
-async def delete_expense(
-    expense_id: str,
-    current_user: User = Depends(get_current_active_user)
-):
-    """Delete expense"""
-    success = await expense_service.delete_expense(expense_id, str(current_user.id))
-    
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
-    
-    return {"message": "Expense deleted successfully"}
+        raise HTTPException

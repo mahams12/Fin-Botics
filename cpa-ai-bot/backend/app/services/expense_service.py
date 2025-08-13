@@ -83,7 +83,9 @@ class ExpenseService:
         start_datetime = datetime.combine(start_date, datetime.min.time()) if start_date else None
         end_datetime = datetime.combine(end_date, datetime.max.time()) if end_date else None
         
-        return await self.expense_db.get_user_expenses(
+        logger.info(f"Getting expenses for user {user_id}: start={start_datetime}, end={end_datetime}, category={category}")
+        
+        expenses = await self.expense_db.get_user_expenses(
             user_id=user_id,
             limit=limit,
             skip=skip,
@@ -91,6 +93,9 @@ class ExpenseService:
             start_date=start_datetime,
             end_date=end_datetime
         )
+        
+        logger.info(f"Retrieved {len(expenses)} expenses from database")
+        return expenses
 
     async def get_expense_by_id(self, expense_id: str, user_id: str) -> Optional[Expense]:
         """Get expense by ID (with user verification)"""

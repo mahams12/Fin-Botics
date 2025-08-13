@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Plus, MoreHorizontal } from 'lucide-react';
 import ExpenseItem from './ExpenseItem';
 import ExpenseForm from './ExpenseForm';
@@ -33,6 +33,19 @@ const ExpenseList = () => {
     bulkDeleteExpenses,
     refetch 
   } = useExpenses(filters);
+
+  // Listen for new expenses added from Header
+  useEffect(() => {
+    const handleExpenseAdded = () => {
+      refetch(); // Refresh the expense list
+    };
+
+    window.addEventListener('expenseAdded', handleExpenseAdded);
+    
+    return () => {
+      window.removeEventListener('expenseAdded', handleExpenseAdded);
+    };
+  }, [refetch]);
 
   // Ensure expenses is always an array to prevent map errors
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
@@ -107,8 +120,8 @@ const ExpenseList = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
-          <p className="text-gray-600">Track and manage your business expenses</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Expenses</h1>
+          <p className="text-gray-600 dark:text-gray-400">Track and manage your business expenses</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -120,7 +133,7 @@ const ExpenseList = () => {
       </div>
 
       {/* Filters and Search */}
-      <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-200">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-soft border border-gray-200 dark:border-gray-700">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Search */}
           <div className="relative">
@@ -129,7 +142,7 @@ const ExpenseList = () => {
               placeholder="Search expenses..."
               value={searchQuery}
               onChange={handleSearch}
-              className="form-input pl-10"
+              className="form-input pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
           </div>
@@ -138,7 +151,7 @@ const ExpenseList = () => {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="form-select"
+            className="form-select dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           >
             <option value="">All Categories</option>
             {EXPENSE_CATEGORIES.map(category => (
@@ -152,7 +165,7 @@ const ExpenseList = () => {
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value)}
-            className="form-select"
+            className="form-select dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           >
             {DATE_RANGES.map(range => (
               <option key={range.value} value={range.value}>
@@ -169,7 +182,7 @@ const ExpenseList = () => {
               setSortBy(field);
               setSortOrder(order);
             }}
-            className="form-select"
+            className="form-select dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           >
             <option value="date-desc">Newest First</option>
             <option value="date-asc">Oldest First</option>
@@ -182,9 +195,9 @@ const ExpenseList = () => {
 
       {/* Bulk Actions */}
       {selectedExpenses.length > 0 && (
-        <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+        <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
-            <span className="text-primary-700 font-medium">
+            <span className="text-primary-700 dark:text-primary-300 font-medium">
               {selectedExpenses.length} expense(s) selected
             </span>
             <div className="flex items-center space-x-3">
@@ -207,18 +220,18 @@ const ExpenseList = () => {
       )}
 
       {/* Expenses List */}
-      <div className="bg-white rounded-xl shadow-soft border border-gray-200">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-soft border border-gray-200 dark:border-gray-700">
         {isLoading ? (
           <div className="p-8">
             <Loading message="Loading expenses..." />
           </div>
         ) : safeExpenses.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <MoreHorizontal className="w-8 h-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses found</h3>
-            <p className="text-gray-600 mb-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No expenses found</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
               {searchQuery || selectedCategory 
                 ? 'Try adjusting your filters or search terms.'
                 : 'Get started by adding your first expense.'
@@ -233,9 +246,9 @@ const ExpenseList = () => {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {/* Header */}
-            <div className="px-6 py-3 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               <div className="flex items-center">
                 <input
                   type="checkbox"

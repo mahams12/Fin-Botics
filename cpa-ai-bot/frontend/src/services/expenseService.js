@@ -1,266 +1,474 @@
-import { apiMethods, buildUrl } from './api';
+import axios from 'axios';
+
+// Create axios instance with FIXED base URL (no /api/v1)
+const api = axios.create({
+  baseURL: 'http://localhost:8080', // Hardcoded without /api/v1
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add session ID
+api.interceptors.request.use(
+  (config) => {
+    const sessionId = localStorage.getItem('session_id');
+    const token = localStorage.getItem('token');
+    
+    if (sessionId) {
+      config.headers['X-Session-ID'] = sessionId;
+      config.headers['Authorization'] = `Bearer ${sessionId}`;
+      if (!config.params) {
+        config.params = {};
+      }
+      config.params.session_id = sessionId;
+    } else if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // LOG THE EXACT URL BEING CALLED
+    const queryString = config.params ? new URLSearchParams(config.params).toString() : '';
+    const fullUrl = `${config.baseURL}${config.url}${queryString ? `?${queryString}` : ''}`;
+    console.log('🔥 EXPENSES API CALL:', fullUrl);
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor
+api.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    console.error('Expenses API Error:', error.response?.status, error.config?.url);
+    return Promise.reject(error);
+  }
+);
 
 export const expenseService = {
   // Get expenses with filters
   getExpenses: async (filters = {}) => {
-    const url = buildUrl('/expenses', filters);
-    const response = await apiMethods.get(url);
-    return response;
+    console.log('🎯 Input filters:', filters);
+    
+    try {
+      // Pass filters as params to axios, let it handle query string
+      const response = await api.get('/api/v1/expenses', {
+        params: filters
+      });
+      return response;
+    } catch (error) {
+      console.error('getExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Get single expense
+  // All other methods remain the same...
   getExpense: async (expenseId) => {
-    const response = await apiMethods.get(`/expenses/${expenseId}`);
-    return response;
+    try {
+      const response = await api.get(`/api/v1/expenses/${expenseId}`);
+      return response;
+    } catch (error) {
+      console.error('getExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Create new expense
   createExpense: async (expenseData) => {
-    const response = await apiMethods.post('/expenses', expenseData);
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses', expenseData);
+      return response;
+    } catch (error) {
+      console.error('createExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Update expense
   updateExpense: async (expenseId, expenseData) => {
-    const response = await apiMethods.put(`/expenses/${expenseId}`, expenseData);
-    return response;
+    try {
+      const response = await api.put(`/api/v1/expenses/${expenseId}`, expenseData);
+      return response;
+    } catch (error) {
+      console.error('updateExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Delete expense
   deleteExpense: async (expenseId) => {
-    const response = await apiMethods.delete(`/expenses/${expenseId}`);
-    return response;
+    try {
+      const response = await api.delete(`/api/v1/expenses/${expenseId}`);
+      return response;
+    } catch (error) {
+      console.error('deleteExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Bulk delete expenses
   bulkDeleteExpenses: async (expenseIds) => {
-    const response = await apiMethods.post('/expenses/bulk-delete', {
-      expense_ids: expenseIds,
-    });
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/bulk-delete', {
+        expense_ids: expenseIds,
+      });
+      return response;
+    } catch (error) {
+      console.error('bulkDeleteExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Bulk update expenses
   bulkUpdateExpenses: async (data) => {
-    const response = await apiMethods.post('/expenses/bulk-update', data);
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/bulk-update', data);
+      return response;
+    } catch (error) {
+      console.error('bulkUpdateExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Upload receipt
   uploadReceipt: async (expenseId, file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await apiMethods.upload(`/expenses/${expenseId}/receipt`, formData);
-    return response;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await api.post(`/api/v1/expenses/${expenseId}/receipt`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response;
+    } catch (error) {
+      console.error('uploadReceipt failed:', error);
+      throw error;
+    }
   },
 
-  // Delete receipt
   deleteReceipt: async (expenseId, receiptId) => {
-    const response = await apiMethods.delete(`/expenses/${expenseId}/receipt/${receiptId}`);
-    return response;
+    try {
+      const response = await api.delete(`/api/v1/expenses/${expenseId}/receipt/${receiptId}`);
+      return response;
+    } catch (error) {
+      console.error('deleteReceipt failed:', error);
+      throw error;
+    }
   },
 
-  // OCR receipt processing
   processReceipt: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await apiMethods.upload('/expenses/process-receipt', formData);
-    return response;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await api.post('/api/v1/expenses/process-receipt', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response;
+    } catch (error) {
+      console.error('processReceipt failed:', error);
+      throw error;
+    }
   },
 
-  // Get expense categories
   getCategories: async () => {
-    const response = await apiMethods.get('/expenses/categories');
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/categories');
+      return response;
+    } catch (error) {
+      console.error('getCategories failed:', error);
+      throw error;
+    }
   },
 
-  // Create custom category
   createCategory: async (categoryData) => {
-    const response = await apiMethods.post('/expenses/categories', categoryData);
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/categories', categoryData);
+      return response;
+    } catch (error) {
+      console.error('createCategory failed:', error);
+      throw error;
+    }
   },
 
-  // Update category
   updateCategory: async (categoryId, categoryData) => {
-    const response = await apiMethods.put(`/expenses/categories/${categoryId}`, categoryData);
-    return response;
+    try {
+      const response = await api.put(`/api/v1/expenses/categories/${categoryId}`, categoryData);
+      return response;
+    } catch (error) {
+      console.error('updateCategory failed:', error);
+      throw error;
+    }
   },
 
-  // Delete category
   deleteCategory: async (categoryId) => {
-    const response = await apiMethods.delete(`/expenses/categories/${categoryId}`);
-    return response;
+    try {
+      const response = await api.delete(`/api/v1/expenses/categories/${categoryId}`);
+      return response;
+    } catch (error) {
+      console.error('deleteCategory failed:', error);
+      throw error;
+    }
   },
 
-  // Get expense statistics
   getExpenseStats: async (dateRange = {}) => {
-    const url = buildUrl('/expenses/stats', dateRange);
-    const response = await apiMethods.get(url);
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/stats', {
+        params: dateRange
+      });
+      return response;
+    } catch (error) {
+      console.error('getExpenseStats failed:', error);
+      throw error;
+    }
   },
 
-  // Get spending trends
   getSpendingTrends: async (period = 'monthly', dateRange = {}) => {
-    const params = { period, ...dateRange };
-    const url = buildUrl('/expenses/trends', params);
-    const response = await apiMethods.get(url);
-    return response;
+    try {
+      const params = { period, ...dateRange };
+      const response = await api.get('/api/v1/expenses/trends', { params });
+      return response;
+    } catch (error) {
+      console.error('getSpendingTrends failed:', error);
+      throw error;
+    }
   },
 
-  // Get category breakdown
   getCategoryBreakdown: async (dateRange = {}) => {
-    const url = buildUrl('/expenses/category-breakdown', dateRange);
-    const response = await apiMethods.get(url);
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/category-breakdown', { 
+        params: dateRange 
+      });
+      return response;
+    } catch (error) {
+      console.error('getCategoryBreakdown failed:', error);
+      throw error;
+    }
   },
 
-  // Export expenses
   exportExpenses: async (filters = {}, format = 'csv') => {
-    const params = { ...filters, format };
-    const response = await apiMethods.download('/expenses/export', {
-      params
-    });
-    return response;
+    try {
+      const params = { ...filters, format };
+      const response = await api.get('/api/v1/expenses/export', { 
+        params,
+        responseType: 'blob' 
+      });
+      return response;
+    } catch (error) {
+      console.error('exportExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Import expenses
   importExpenses: async (file, options = {}) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    Object.entries(options).forEach(([key, value]) => {
-      formData.append(key, value);
-    });
-    
-    const response = await apiMethods.upload('/expenses/import', formData);
-    return response;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      Object.entries(options).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+      
+      const response = await api.post('/api/v1/expenses/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response;
+    } catch (error) {
+      console.error('importExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Get import template
   getImportTemplate: async (format = 'csv') => {
-    const response = await apiMethods.download('/expenses/import-template', {
-      params: { format }
-    });
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/import-template', { 
+        params: { format },
+        responseType: 'blob' 
+      });
+      return response;
+    } catch (error) {
+      console.error('getImportTemplate failed:', error);
+      throw error;
+    }
   },
 
-  // Duplicate expense
   duplicateExpense: async (expenseId) => {
-    const response = await apiMethods.post(`/expenses/${expenseId}/duplicate`);
-    return response;
+    try {
+      const response = await api.post(`/api/v1/expenses/${expenseId}/duplicate`);
+      return response;
+    } catch (error) {
+      console.error('duplicateExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Split expense
   splitExpense: async (expenseId, splitData) => {
-    const response = await apiMethods.post(`/expenses/${expenseId}/split`, splitData);
-    return response;
+    try {
+      const response = await api.post(`/api/v1/expenses/${expenseId}/split`, splitData);
+      return response;
+    } catch (error) {
+      console.error('splitExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Merge expenses
   mergeExpenses: async (expenseIds, mergeData) => {
-    const response = await apiMethods.post('/expenses/merge', {
-      expense_ids: expenseIds,
-      ...mergeData,
-    });
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/merge', {
+        expense_ids: expenseIds,
+        ...mergeData,
+      });
+      return response;
+    } catch (error) {
+      console.error('mergeExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Get recurring expenses
   getRecurringExpenses: async () => {
-    const response = await apiMethods.get('/expenses/recurring');
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/recurring');
+      return response;
+    } catch (error) {
+      console.error('getRecurringExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Create recurring expense
   createRecurringExpense: async (recurringData) => {
-    const response = await apiMethods.post('/expenses/recurring', recurringData);
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/recurring', recurringData);
+      return response;
+    } catch (error) {
+      console.error('createRecurringExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Update recurring expense
   updateRecurringExpense: async (recurringId, recurringData) => {
-    const response = await apiMethods.put(`/expenses/recurring/${recurringId}`, recurringData);
-    return response;
+    try {
+      const response = await api.put(`/api/v1/expenses/recurring/${recurringId}`, recurringData);
+      return response;
+    } catch (error) {
+      console.error('updateRecurringExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Delete recurring expense
   deleteRecurringExpense: async (recurringId) => {
-    const response = await apiMethods.delete(`/expenses/recurring/${recurringId}`);
-    return response;
+    try {
+      const response = await api.delete(`/api/v1/expenses/recurring/${recurringId}`);
+      return response;
+    } catch (error) {
+      console.error('deleteRecurringExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Get tax deductions
   getTaxDeductions: async (taxYear) => {
-    const response = await apiMethods.get(`/expenses/tax-deductions/${taxYear}`);
-    return response;
+    try {
+      const response = await api.get(`/api/v1/expenses/tax-deductions/${taxYear}`);
+      return response;
+    } catch (error) {
+      console.error('getTaxDeductions failed:', error);
+      throw error;
+    }
   },
 
-  // Mark expense as tax deductible
   markTaxDeductible: async (expenseId, deductionData) => {
-    const response = await apiMethods.post(`/expenses/${expenseId}/tax-deduction`, deductionData);
-    return response;
+    try {
+      const response = await api.post(`/api/v1/expenses/${expenseId}/tax-deduction`, deductionData);
+      return response;
+    } catch (error) {
+      console.error('markTaxDeductible failed:', error);
+      throw error;
+    }
   },
 
-  // Remove tax deduction
   removeTaxDeduction: async (expenseId) => {
-    const response = await apiMethods.delete(`/expenses/${expenseId}/tax-deduction`);
-    return response;
+    try {
+      const response = await api.delete(`/api/v1/expenses/${expenseId}/tax-deduction`);
+      return response;
+    } catch (error) {
+      console.error('removeTaxDeduction failed:', error);
+      throw error;
+    }
   },
 
-  // Get mileage expenses
   getMileageExpenses: async (filters = {}) => {
-    const url = buildUrl('/expenses/mileage', filters);
-    const response = await apiMethods.get(url);
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/mileage', { params: filters });
+      return response;
+    } catch (error) {
+      console.error('getMileageExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Create mileage expense
   createMileageExpense: async (mileageData) => {
-    const response = await apiMethods.post('/expenses/mileage', mileageData);
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/mileage', mileageData);
+      return response;
+    } catch (error) {
+      console.error('createMileageExpense failed:', error);
+      throw error;
+    }
   },
 
-  // Calculate mileage expense
   calculateMileage: async (distance, purpose, date) => {
-    const response = await apiMethods.post('/expenses/calculate-mileage', {
-      distance,
-      purpose,
-      date,
-    });
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/calculate-mileage', {
+        distance, purpose, date,
+      });
+      return response;
+    } catch (error) {
+      console.error('calculateMileage failed:', error);
+      throw error;
+    }
   },
 
-  // Search expenses
   searchExpenses: async (query, filters = {}) => {
-    const params = { query, ...filters };
-    const url = buildUrl('/expenses/search', params);
-    const response = await apiMethods.get(url);
-    return response;
+    try {
+      const params = { query, ...filters };
+      const response = await api.get('/api/v1/expenses/search', { params });
+      return response;
+    } catch (error) {
+      console.error('searchExpenses failed:', error);
+      throw error;
+    }
   },
 
-  // Get expense tags
   getTags: async () => {
-    const response = await apiMethods.get('/expenses/tags');
-    return response;
+    try {
+      const response = await api.get('/api/v1/expenses/tags');
+      return response;
+    } catch (error) {
+      console.error('getTags failed:', error);
+      throw error;
+    }
   },
 
-  // Create tag
   createTag: async (tagData) => {
-    const response = await apiMethods.post('/expenses/tags', tagData);
-    return response;
+    try {
+      const response = await api.post('/api/v1/expenses/tags', tagData);
+      return response;
+    } catch (error) {
+      console.error('createTag failed:', error);
+      throw error;
+    }
   },
 
-  // Update tag
   updateTag: async (tagId, tagData) => {
-    const response = await apiMethods.put(`/expenses/tags/${tagId}`, tagData);
-    return response;
+    try {
+      const response = await api.put(`/api/v1/expenses/tags/${tagId}`, tagData);
+      return response;
+    } catch (error) {
+      console.error('updateTag failed:', error);
+      throw error;
+    }
   },
 
-  // Delete tag
   deleteTag: async (tagId) => {
-    const response = await apiMethods.delete(`/expenses/tags/${tagId}`);
-    return response;
+    try {
+      const response = await api.delete(`/api/v1/expenses/tags/${tagId}`);
+      return response;
+    } catch (error) {
+      console.error('deleteTag failed:', error);
+      throw error;
+    }
   },
 };
