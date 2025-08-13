@@ -4,11 +4,14 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
 import { getMonthNames } from '../../utils/dateUtils';
+import { reportService } from '../../services/reportService';
 
 const MonthlyReport = () => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   // Mock data - replace with actual API call
   const monthlyData = {
@@ -37,8 +40,35 @@ const MonthlyReport = () => {
     ]
   };
 
-  const handleDownload = () => {
-    console.log('Downloading monthly report...');
+  const handleDownload = async () => {
+    if (isDownloading) return;
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
+    try {
+      // Format dates for API
+      const startDate = `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}-01`;
+      const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0];
+
+      console.log(`🔧 Downloading monthly report for ${selectedMonth + 1}/${selectedYear}`);
+      
+      // Call the download service
+      await reportService.downloadMonthlyReport({
+        month: selectedMonth + 1,
+        year: selectedYear,
+        start_date: startDate,
+        end_date: endDate
+      });
+
+      console.log('✅ Download completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Download failed:', error);
+      setDownloadError('Failed to download report. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const months = getMonthNames();
@@ -80,13 +110,25 @@ const MonthlyReport = () => {
             ))}
           </select>
           
-          <Button onClick={handleDownload} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Download
+          <Button 
+            onClick={handleDownload} 
+            variant="outline"
+            disabled={isDownloading}
+          >
+            <Download className={`w-4 h-4 mr-2 ${isDownloading ? 'animate-spin' : ''}`} />
+            {isDownloading ? 'Downloading...' : 'Download'}
           </Button>
         </div>
       </div>
 
+      {/* Error message */}
+      {downloadError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-600 text-sm">{downloadError}</p>
+        </div>
+      )}
+
+      {/* Rest of your existing component stays the same */}
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
