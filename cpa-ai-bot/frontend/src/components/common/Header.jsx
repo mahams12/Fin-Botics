@@ -21,9 +21,15 @@ const Header = () => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [profileImageKey, setProfileImageKey] = useState(0); // Force re-render key
   
   const profileDropdownRef = useRef(null);
   const notificationDropdownRef = useRef(null);
+
+  // Force re-render when user profile picture changes
+  useEffect(() => {
+    setProfileImageKey(prev => prev + 1);
+  }, [user?.profile_picture]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -84,6 +90,45 @@ const Header = () => {
   ];
 
   const unreadCount = notifications.filter(n => n.unread).length;
+
+  // Get profile image with fallback
+  const getProfileImage = () => {
+    return user?.profile_picture;
+  };
+
+  // Get user initials
+  const getUserInitials = () => {
+    return user?.first_name?.charAt(0) || 'U';
+  };
+
+  // Profile Avatar Component - Add key prop to force re-render
+  const ProfileAvatar = ({ size = 'w-8 h-8', textSize = 'text-sm' }) => {
+    const profileImage = getProfileImage();
+    
+    if (profileImage) {
+      return (
+        <img
+          key={`${profileImage}-${profileImageKey}`} // Force re-render when image changes
+          src={profileImage}
+          alt="Profile"
+          className={`${size} rounded-full object-cover border-2 border-white shadow-sm`}
+          onError={(e) => {
+            console.error('Profile image failed to load:', profileImage);
+            // You could add fallback logic here if needed
+          }}
+        />
+      );
+    }
+    
+    return (
+      <div 
+        key={`initials-${user?.first_name || 'U'}-${profileImageKey}`} // Force re-render when user changes
+        className={`${size} bg-primary-600 text-white rounded-full flex items-center justify-center ${textSize} font-medium`}
+      >
+        {getUserInitials()}
+      </div>
+    );
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 fixed top-0 right-0 left-0 z-40">
@@ -211,9 +256,7 @@ const Header = () => {
               onClick={() => setShowProfileDropdown(!showProfileDropdown)}
               className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <div className="w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                {user?.first_name?.charAt(0) || 'U'}
-              </div>
+              <ProfileAvatar />
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium text-gray-900">
                   {user?.first_name} {user?.last_name}
@@ -229,9 +272,7 @@ const Header = () => {
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-hard border border-gray-200 z-50">
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-primary-600 text-white rounded-full flex items-center justify-center font-medium">
-                      {user?.first_name?.charAt(0) || 'U'}
-                    </div>
+                    <ProfileAvatar size="w-10 h-10" textSize="text-base" />
                     <div>
                       <p className="font-medium text-gray-900">
                         {user?.first_name} {user?.last_name}

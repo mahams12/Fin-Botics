@@ -6,6 +6,7 @@ from app.database.chat_db import ChatDatabase
 from app.models.user import User, UserCreate, UserUpdate
 from app.utils.validators import ValidationError, validate_user_name
 from app.utils.formatters import format_user_response
+from bson import ObjectId
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,15 +39,47 @@ class UserService:
             # Validate input data
             update_dict = {}
             
+            # Handle individual fields
+            if update_data.first_name is not None:
+                update_dict["first_name"] = update_data.first_name.strip()
+            
+            if update_data.last_name is not None:
+                update_dict["last_name"] = update_data.last_name.strip()
+            
+            if update_data.business_name is not None:
+                update_dict["business_name"] = update_data.business_name.strip()
+            
+            if update_data.phone is not None:
+                update_dict["phone"] = update_data.phone.strip()
+            
+            if update_data.address is not None:
+                update_dict["address"] = update_data.address.strip()
+            
+            if update_data.profile_picture is not None:
+                update_dict["profile_picture"] = update_data.profile_picture
+            
+            # Handle full_name - either from direct update or from first/last name
             if update_data.full_name is not None:
                 validated_name = validate_user_name(update_data.full_name)
                 update_dict["full_name"] = validated_name
+            elif "first_name" in update_dict or "last_name" in update_dict:
+                # Get current user to build full name
+                current_user = await self.user_db.get_user_by_id(user_id)
+                if current_user:
+                    first_name = update_dict.get("first_name", getattr(current_user, 'first_name', ''))
+                    last_name = update_dict.get("last_name", getattr(current_user, 'last_name', ''))
+                    full_name = f"{first_name} {last_name}".strip()
+                    if full_name:
+                        update_dict["full_name"] = full_name
             
             if update_data.is_active is not None:
                 update_dict["is_active"] = update_data.is_active
             
             if not update_dict:
                 raise ValidationError("No valid data provided for update")
+            
+            # Add updated timestamp
+            update_dict["updated_at"] = datetime.utcnow()
             
             # Update user
             updated_user = await self.user_db.update_user(user_id, update_dict)
@@ -60,6 +93,25 @@ class UserService:
             raise
         except Exception as e:
             logger.error(f"Error updating user profile {user_id}: {e}")
+            return None
+
+    async def update_profile_picture(self, user_id: str, picture_url: Optional[str]) -> Optional[User]:
+        """Update user profile picture"""
+        try:
+            update_data = {
+                "profile_picture": picture_url,
+                "updated_at": datetime.utcnow()
+            }
+            
+            updated_user = await self.user_db.update_user(user_id, update_data)
+            
+            if updated_user:
+                logger.info(f"Profile picture updated for user: {user_id}")
+            
+            return updated_user
+            
+        except Exception as e:
+            logger.error(f"Error updating profile picture for user {user_id}: {e}")
             return None
 
     async def get_user_statistics(self, user_id: str) -> Dict[str, Any]:
@@ -103,7 +155,8 @@ class UserService:
             total_sessions = len(chat_sessions)
             
             # Recent activity (last 30 days)
-            thirty_days_ago = datetime.utcnow().replace(day=1) - datetime.timedelta(days=30)
+            from datetime import timedelta
+            thirty_days_ago = datetime.utcnow() - timedelta(days=30)
             recent_expenses = [
                 expense for expense in all_expenses 
                 if expense.created_at >= thirty_days_ago
@@ -115,6 +168,10 @@ class UserService:
                     "id": str(user.id),
                     "email": user.email,
                     "full_name": user.full_name,
+                    "first_name": getattr(user, 'first_name', ''),
+                    "last_name": getattr(user, 'last_name', ''),
+                    "business_name": getattr(user, 'business_name', ''),
+                    "profile_picture": getattr(user, 'profile_picture', None),
                     "is_active": user.is_active,
                     "member_since": user.created_at,
                     "last_updated": user.updated_at
@@ -346,7 +403,9 @@ class UserService:
             search_query = {
                 "$or": [
                     {"email": {"$regex": query, "$options": "i"}},
-                    {"full_name": {"$regex": query, "$options": "i"}}
+                    {"full_name": {"$regex": query, "$options": "i"}},
+                    {"first_name": {"$regex": query, "$options": "i"}},
+                    {"last_name": {"$regex": query, "$options": "i"}}
                 ]
             }
             

@@ -6,15 +6,30 @@ class UserCreateRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     full_name: str = Field(..., min_length=2, max_length=100)
+    first_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    business_name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
 
 class UserUpdateRequest(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    first_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    business_name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    address: Optional[str] = Field(None, max_length=200)
     is_active: Optional[bool] = None
 
 class UserResponse(BaseModel):
     id: str
     email: str
     full_name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    business_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    profile_picture: Optional[str] = None
     is_active: bool
     is_admin: bool
     created_at: datetime
@@ -25,6 +40,13 @@ class UserProfileResponse(UserResponse):
     google_id: Optional[str] = None
     last_login: Optional[datetime] = None
     email_verified: bool = False
+
+class ProfilePictureUploadResponse(BaseModel):
+    message: str
+    profile_picture: str
+
+class ProfilePictureRemoveResponse(BaseModel):
+    message: str
 
 class UserStatisticsResponse(BaseModel):
     user_info: Dict[str, Any]

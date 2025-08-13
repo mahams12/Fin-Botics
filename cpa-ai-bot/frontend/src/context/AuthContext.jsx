@@ -5,8 +5,8 @@ import toast from 'react-hot-toast';
 // Initial state
 const initialState = {
   user: null,
-  session_id: localStorage.getItem('session_id'), // Changed from token
-  google_token: localStorage.getItem('google_token'), // Store Google token separately
+  session_id: localStorage.getItem('session_id'),
+  google_token: localStorage.getItem('google_token'),
   loading: true,
   error: null,
   isAuthenticated: false,
@@ -21,6 +21,7 @@ const AUTH_ACTIONS = {
   LOGOUT: 'LOGOUT',
   CLEAR_ERROR: 'CLEAR_ERROR',
   UPDATE_PROFILE: 'UPDATE_PROFILE',
+  UPDATE_PROFILE_PICTURE: 'UPDATE_PROFILE_PICTURE',
 };
 
 // Reducer function
@@ -57,7 +58,7 @@ const authReducer = (state, action) => {
       return {
         ...state,
         user: action.payload.user,
-        session_id: action.payload.session_id, // Changed from token
+        session_id: action.payload.session_id,
         google_token: action.payload.google_token || state.google_token,
         isAuthenticated: true,
         loading: false,
@@ -71,7 +72,7 @@ const authReducer = (state, action) => {
       return {
         ...state,
         user: null,
-        session_id: null, // Changed from token
+        session_id: null,
         google_token: null,
         isAuthenticated: false,
         loading: false,
@@ -83,9 +84,18 @@ const authReducer = (state, action) => {
         error: null,
       };
     case AUTH_ACTIONS.UPDATE_PROFILE:
+      const updatedUser = { ...state.user, ...action.payload };
       return {
         ...state,
-        user: { ...state.user, ...action.payload },
+        user: updatedUser,
+      };
+    case AUTH_ACTIONS.UPDATE_PROFILE_PICTURE:
+      return {
+        ...state,
+        user: {
+          ...state.user,
+          profile_picture: action.payload,
+        },
       };
     default:
       return state;
@@ -240,19 +250,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update profile function
+  // Update profile function - ENHANCED for profile pictures
   const updateProfile = async (profileData) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       const updatedUser = await authService.updateProfile(profileData);
       dispatch({ type: AUTH_ACTIONS.UPDATE_PROFILE, payload: updatedUser });
-      toast.success('Profile updated successfully!');
+      
+      // Don't show toast here - let the component handle it
       return updatedUser;
     } catch (error) {
       const errorMessage = error.response?.data?.detail || 'Profile update failed';
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
-      toast.error(errorMessage);
       throw error;
+    } finally {
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+    }
+  };
+
+  // Update profile picture function
+  const updateProfilePicture = async (pictureUrl) => {
+    try {
+      dispatch({ type: AUTH_ACTIONS.UPDATE_PROFILE_PICTURE, payload: pictureUrl });
+      return true;
+    } catch (error) {
+      console.error('Error updating profile picture in context:', error);
+      return false;
     }
   };
 
@@ -269,6 +292,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
+    updateProfilePicture,
     clearError,
   };
 

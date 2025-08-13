@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
+import os
 
 # Import routers
 from app.api.v1.auth import router as auth_router
@@ -25,6 +27,17 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up CPA AI Bot API...")
     await connect_to_mongo()
     logger.info("Database connected successfully")
+    
+    # Create upload directories
+    upload_dirs = [
+        "uploads/profile_pictures",
+        "uploads/receipts",
+        "uploads/documents"
+    ]
+    
+    for upload_dir in upload_dirs:
+        os.makedirs(upload_dir, exist_ok=True)
+        logger.info(f"Created upload directory: {upload_dir}")
     
     yield
     
@@ -51,6 +64,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
+
+# Mount static files for serving uploaded images
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
 # Include routers
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])

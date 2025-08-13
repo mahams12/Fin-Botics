@@ -22,25 +22,35 @@ class PyObjectId(ObjectId):
 class UserBase(BaseModel):
     email: EmailStr
     full_name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    business_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
     is_active: bool = True
     is_admin: bool = False
 
 class UserCreate(UserBase):
     password: Optional[str] = None
     google_id: Optional[str] = None
-    profile_picture: Optional[str] = None  # Add this field
+    profile_picture: Optional[str] = None
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    business_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
     is_active: Optional[bool] = None
-    profile_picture: Optional[str] = None  # Add this field
+    profile_picture: Optional[str] = None
 
 class UserInDB(UserBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     hashed_password: Optional[str] = None
     google_id: Optional[str] = None
-    profile_picture: Optional[str] = None  # Add this field
-    email_verified: Optional[bool] = False  # Also useful for Google OAuth
+    profile_picture: Optional[str] = None
+    email_verified: Optional[bool] = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
