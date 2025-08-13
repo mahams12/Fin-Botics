@@ -4,6 +4,7 @@ from typing import Optional
 import logging
 from datetime import datetime, timedelta
 import io
+import urllib.parse
 from app.services.report_service import ReportService
 
 logger = logging.getLogger(__name__)
@@ -183,45 +184,84 @@ async def download_report_generic(
     try:
         user_id = "demo_user_123"
         logger.info(f"Generic report download requested: {report_type} by user {user_id}")
+        logger.info(f"Raw parameters - start_date: {start_date}, end_date: {end_date}, format: {format}")
+        
+        # URL decode the parameters if needed
+        if start_date and '%' in start_date:
+            decoded_start = urllib.parse.unquote(start_date)
+            logger.info(f"URL decoded start_date: {start_date} -> {decoded_start}")
+            start_date = decoded_start
+            
+        if end_date and '%' in end_date:
+            decoded_end = urllib.parse.unquote(end_date)
+            logger.info(f"URL decoded end_date: {end_date} -> {decoded_end}")
+            end_date = decoded_end
         
         date_range = {
             "start_date": start_date,
             "end_date": end_date
         }
+        logger.info(f"Date range object: {date_range}")
         
         # Route to appropriate report generation method
-        if report_type == "financial_summary":
-            report_data = await report_service.generate_financial_summary(user_id, date_range)
-        elif report_type == "profit_loss":
-            report_data = await report_service.generate_profit_loss(user_id, date_range)
-        elif report_type == "expense_analysis":
-            report_data = await report_service.generate_expense_analysis(user_id, date_range)
-        elif report_type == "cash_flow":
-            report_data = await report_service.generate_cash_flow(user_id, date_range)
-        elif report_type == "monthly":
-            report_data = await report_service.generate_monthly_report(user_id, date_range)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported report type: {report_type}")
+        try:
+            if report_type == "financial_summary" or report_type == "financial-summary":
+                logger.info("Generating financial summary...")
+                report_data = await report_service.generate_financial_summary(user_id, date_range)
+            elif report_type == "profit_loss" or report_type == "profit-loss":
+                logger.info("Generating profit loss report...")
+                report_data = await report_service.generate_profit_loss(user_id, date_range)
+            elif report_type == "expense_analysis" or report_type == "expense-analysis":
+                logger.info("Generating expense analysis...")
+                report_data = await report_service.generate_expense_analysis(user_id, date_range)
+            elif report_type == "cash_flow" or report_type == "cash-flow":
+                logger.info("Generating cash flow report...")
+                report_data = await report_service.generate_cash_flow(user_id, date_range)
+            elif report_type == "monthly":
+                logger.info("Generating monthly report...")
+                report_data = await report_service.generate_monthly_report(user_id, date_range)
+            else:
+                logger.error(f"Unsupported report type: {report_type}")
+                raise HTTPException(status_code=400, detail=f"Unsupported report type: {report_type}")
+            
+            logger.info(f"Report data generated successfully: {report_data.get('id', 'unknown')}")
+            
+        except Exception as e:
+            logger.error(f"Error in report generation for {report_type}: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to generate {report_type} report: {str(e)}")
         
         # Export in requested format
-        file_content, filename, content_type = await report_service.export_report(
-            report_data,
-            format
-        )
+        try:
+            logger.info(f"Exporting report as {format}...")
+            file_content, filename, content_type = await report_service.export_report(
+                report_data,
+                format
+            )
+            logger.info(f"Export successful: {filename}")
+            
+        except Exception as e:
+            logger.error(f"Error in report export: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to export {report_type} report: {str(e)}")
         
-        return StreamingResponse(
-            io.BytesIO(file_content),
-            media_type=content_type,
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}",
-                "Content-Length": str(len(file_content))
-            }
-        )
+        # Return as streaming response
+        try:
+            logger.info(f"Creating streaming response...")
+            return StreamingResponse(
+                io.BytesIO(file_content),
+                media_type=content_type,
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "Content-Length": str(len(file_content))
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error creating streaming response: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to create response: {str(e)}")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to download {report_type} report: {str(e)}")
+        logger.error(f"Unexpected error in download_report_generic: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate {report_type} report: {str(e)}")
 
 @router.get("/{report_id}/export")

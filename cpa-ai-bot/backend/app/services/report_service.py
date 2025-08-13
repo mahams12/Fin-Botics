@@ -361,6 +361,156 @@ class ReportService:
             
             story.append(category_table)
             
+        elif report_data['type'] == 'profit_loss':
+            data = report_data['data']
+            
+            # P&L table
+            pl_data = [
+                ['Income Statement', 'Amount'],
+                ['Total Revenue', f"${data['revenue']['total_revenue']:,.2f}"],
+                ['  Service Income', f"${data['revenue']['service_income']:,.2f}"],
+                ['  Product Sales', f"${data['revenue']['product_sales']:,.2f}"],
+                ['', ''],
+                ['Total Expenses', f"${data['expenses']['total_expenses']:,.2f}"],
+                ['  Cost of Goods Sold', f"${data['expenses']['cost_of_goods_sold']:,.2f}"],
+                ['  Operating Expenses', f"${data['expenses']['operating_expenses']:,.2f}"],
+                ['  Administrative Expenses', f"${data['expenses']['administrative_expenses']:,.2f}"],
+                ['', ''],
+                ['Gross Profit', f"${data['gross_profit']:,.2f}"],
+                ['Operating Profit', f"${data['operating_profit']:,.2f}"],
+                ['Net Profit', f"${data['net_profit']:,.2f}"],
+                ['Profit Margin', f"{data['profit_margin']:.2f}%"]
+            ]
+            
+            table = Table(pl_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 14),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(table)
+            
+        elif report_data['type'] == 'cash_flow':
+            data = report_data['data']
+            
+            # Cash flow summary table
+            summary_data = [
+                ['Cash Flow Statement', 'Amount'],
+                ['Opening Balance', f"${data['opening_balance']:,.2f}"],
+                ['', ''],
+                ['Cash Inflows', ''],
+                ['  Revenue', f"${data['cash_inflows']['revenue']:,.2f}"],
+                ['  Other Income', f"${data['cash_inflows']['other_income']:,.2f}"],
+                ['Total Inflows', f"${data['cash_inflows']['total_inflows']:,.2f}"],
+                ['', ''],
+                ['Cash Outflows', ''],
+                ['  Operating Expenses', f"${data['cash_outflows']['operating_expenses']:,.2f}"],
+                ['  Tax Payments', f"${data['cash_outflows']['tax_payments']:,.2f}"],
+                ['Total Outflows', f"${data['cash_outflows']['total_outflows']:,.2f}"],
+                ['', ''],
+                ['Net Cash Flow', f"${data['net_cash_flow']:,.2f}"],
+                ['Closing Balance', f"${data['closing_balance']:,.2f}"]
+            ]
+            
+            table = Table(summary_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 14),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(table)
+            story.append(Spacer(1, 30))
+            
+            # Monthly cash flow breakdown
+            story.append(Paragraph("Monthly Cash Flow", styles['Heading2']))
+            story.append(Spacer(1, 10))
+            
+            monthly_data = [['Month', 'Inflow', 'Outflow', 'Net Flow']]
+            for month_data in data['monthly_flow']:
+                monthly_data.append([
+                    month_data['month'],
+                    f"${month_data['inflow']:,.2f}",
+                    f"${month_data['outflow']:,.2f}",
+                    f"${month_data['net']:,.2f}"
+                ])
+            
+            monthly_table = Table(monthly_data)
+            monthly_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(monthly_table)
+            
+        elif report_data['type'] == 'expense_analysis':
+            data = report_data['data']
+            
+            # Expense summary table
+            summary_data = [
+                ['Expense Analysis', 'Value'],
+                ['Total Expenses', f"${data['total_expenses']:,.2f}"],
+                ['Total Transactions', data['trends']['total_transactions']],
+                ['Average Transaction', f"${data['trends']['average_transaction']:,.2f}"],
+                ['Highest Category', data['trends']['highest_spending_category']],
+                ['Lowest Category', data['trends']['lowest_spending_category']]
+            ]
+            
+            table = Table(summary_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 14),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(table)
+            story.append(Spacer(1, 30))
+            
+            # Category breakdown
+            story.append(Paragraph("Category Breakdown", styles['Heading2']))
+            story.append(Spacer(1, 10))
+            
+            category_data = [['Category', 'Amount', 'Percentage', 'Transactions']]
+            for category, details in data['categories'].items():
+                category_data.append([
+                    category,
+                    f"${details['amount']:,.2f}",
+                    f"{details['percentage']:.1f}%",
+                    str(details['transactions'])
+                ])
+            
+            category_table = Table(category_data)
+            category_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(category_table)
+            
         elif report_data['type'] == 'financial_summary':
             data = report_data['data']
             summary_data = [
@@ -427,6 +577,26 @@ class ReportService:
             writer.writerow(['Date', 'Amount'])
             for expense in data['daily_expenses']:
                 writer.writerow([expense['date'], expense['amount']])
+                
+        elif report_data['type'] == 'profit_loss':
+            data = report_data['data']
+            
+            # P&L structure
+            writer.writerow(['Income Statement'])
+            writer.writerow(['Item', 'Amount'])
+            writer.writerow(['Total Revenue', data['revenue']['total_revenue']])
+            writer.writerow(['Service Income', data['revenue']['service_income']])
+            writer.writerow(['Product Sales', data['revenue']['product_sales']])
+            writer.writerow([])
+            writer.writerow(['Total Expenses', data['expenses']['total_expenses']])
+            writer.writerow(['Cost of Goods Sold', data['expenses']['cost_of_goods_sold']])
+            writer.writerow(['Operating Expenses', data['expenses']['operating_expenses']])
+            writer.writerow(['Administrative Expenses', data['expenses']['administrative_expenses']])
+            writer.writerow([])
+            writer.writerow(['Gross Profit', data['gross_profit']])
+            writer.writerow(['Operating Profit', data['operating_profit']])
+            writer.writerow(['Net Profit', data['net_profit']])
+            writer.writerow(['Profit Margin (%)', data['profit_margin']])
                 
         elif report_data['type'] == 'financial_summary':
             data = report_data['data']
@@ -501,6 +671,42 @@ class ReportService:
                 sheet[f'C{row}'] = f"{category['percentage']:.1%}"
                 row += 1
                 
+        elif report_data['type'] == 'profit_loss':
+            data = report_data['data']
+            
+            sheet['A6'] = 'Income Statement'
+            sheet['A6'].font = Font(bold=True)
+            
+            sheet['A7'] = 'Item'
+            sheet['B7'] = 'Amount'
+            sheet['A7'].font = Font(bold=True)
+            sheet['B7'].font = Font(bold=True)
+            
+            sheet['A8'] = 'Total Revenue'
+            sheet['B8'] = data['revenue']['total_revenue']
+            sheet['A9'] = 'Service Income'
+            sheet['B9'] = data['revenue']['service_income']
+            sheet['A10'] = 'Product Sales'
+            sheet['B10'] = data['revenue']['product_sales']
+            
+            sheet['A12'] = 'Total Expenses'
+            sheet['B12'] = data['expenses']['total_expenses']
+            sheet['A13'] = 'Cost of Goods Sold'
+            sheet['B13'] = data['expenses']['cost_of_goods_sold']
+            sheet['A14'] = 'Operating Expenses'
+            sheet['B14'] = data['expenses']['operating_expenses']
+            sheet['A15'] = 'Administrative Expenses'
+            sheet['B15'] = data['expenses']['administrative_expenses']
+            
+            sheet['A17'] = 'Gross Profit'
+            sheet['B17'] = data['gross_profit']
+            sheet['A18'] = 'Operating Profit'
+            sheet['B18'] = data['operating_profit']
+            sheet['A19'] = 'Net Profit'
+            sheet['B19'] = data['net_profit']
+            sheet['A20'] = 'Profit Margin (%)'
+            sheet['B20'] = data['profit_margin']
+                
         elif report_data['type'] == 'financial_summary':
             data = report_data['data']
             
@@ -526,9 +732,44 @@ class ReportService:
         return excel_content, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     
     def _parse_date_range(self, date_range: Dict[str, Any]) -> Tuple[str, str]:
-        """Parse date range from request"""
+        """Parse date range from request - FIXED for ISO datetime strings and URL encoding"""
+        import urllib.parse
+        
         start_date = date_range.get('start_date')
         end_date = date_range.get('end_date')
+        
+        # Handle URL-encoded and ISO datetime strings from frontend
+        if start_date:
+            try:
+                # First decode URL encoding if present
+                if '%' in start_date:
+                    start_date = urllib.parse.unquote(start_date)
+                
+                # Parse ISO datetime string and extract date part
+                if 'T' in start_date:
+                    start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00')).date().isoformat()
+                    
+                logger.info(f"Parsed start_date: {start_date}")
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Failed to parse start_date '{start_date}': {e}")
+                # Fall back to default
+                start_date = None
+        
+        if end_date:
+            try:
+                # First decode URL encoding if present
+                if '%' in end_date:
+                    end_date = urllib.parse.unquote(end_date)
+                
+                # Parse ISO datetime string and extract date part
+                if 'T' in end_date:
+                    end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00')).date().isoformat()
+                    
+                logger.info(f"Parsed end_date: {end_date}")
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Failed to parse end_date '{end_date}': {e}")
+                # Fall back to default
+                end_date = None
         
         if not start_date:
             # Default to current year
@@ -539,4 +780,5 @@ class ReportService:
             # Default to current date
             end_date = datetime.now().strftime('%Y-%m-%d')
         
+        logger.info(f"Final date range: {start_date} to {end_date}")
         return start_date, end_date
