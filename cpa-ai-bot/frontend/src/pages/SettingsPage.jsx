@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/common/Header';
 import Sidebar from '../components/common/Sidebar';
 import { useAuth } from '../hooks/useAuth';
+import { useThemeContext } from '../context/ThemeContext';
 import { 
   Shield, 
   Bell, 
@@ -20,39 +21,93 @@ import toast from 'react-hot-toast';
 
 const SettingsPage = () => {
   const { user } = useAuth();
-  const [settings, setSettings] = useState({
-    // Notification Settings
-    emailNotifications: true,
-    pushNotifications: false,
-    weeklyReports: true,
-    taxReminders: true,
-    expenseAlerts: false,
+  const themeContext = useThemeContext();
+  
+  // Get initial settings from localStorage or defaults
+  const getInitialSettings = () => {
+    const savedSettings = localStorage.getItem('userSettings');
+    const defaultSettings = {
+      // Notification Settings
+      emailNotifications: true,
+      pushNotifications: false,
+      weeklyReports: true,
+      taxReminders: true,
+      expenseAlerts: false,
+      
+      // Privacy Settings
+      dataSharing: false,
+      analytics: true,
+      profileVisibility: 'private',
+      
+      // Security Settings
+      twoFactorAuth: false,
+      sessionTimeout: '30',
+      loginAlerts: true,
+      
+      // General Settings
+      theme: localStorage.getItem('theme') || 'light',
+      language: localStorage.getItem('language') || 'en',
+      timezone: localStorage.getItem('timezone') || 'America/New_York',
+      currency: localStorage.getItem('currency') || 'USD',
+      dateFormat: localStorage.getItem('dateFormat') || 'MM/dd/yyyy'
+    };
     
-    // Privacy Settings
-    dataSharing: false,
-    analytics: true,
-    profileVisibility: 'private',
-    
-    // Security Settings
-    twoFactorAuth: false,
-    sessionTimeout: '30',
-    loginAlerts: true,
-    
-    // General Settings
-    theme: 'light',
-    language: 'en',
-    timezone: 'America/New_York',
-    currency: 'USD',
-    dateFormat: 'MM/dd/yyyy'
-  });
+    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
+  };
 
+  const [settings, setSettings] = useState(getInitialSettings);
   const [loading, setLoading] = useState(false);
+
+  // Save settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('userSettings', JSON.stringify(settings));
+    
+    // Apply theme immediately
+    if (settings.theme !== 'auto') {
+      document.documentElement.classList.remove('light', 'dark');
+      document.documentElement.classList.add(settings.theme);
+      localStorage.setItem('theme', settings.theme);
+    } else {
+      // Auto theme - use system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.remove('light', 'dark');
+      document.documentElement.classList.add(prefersDark ? 'dark' : 'light');
+      localStorage.setItem('theme', 'auto');
+    }
+    
+    // Save other preferences
+    localStorage.setItem('language', settings.language);
+    localStorage.setItem('timezone', settings.timezone);
+    localStorage.setItem('currency', settings.currency);
+    localStorage.setItem('dateFormat', settings.dateFormat);
+  }, [settings]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
+    
+    // Show immediate feedback for certain settings
+    if (key === 'theme') {
+      toast.success(`Theme changed to ${value === 'auto' ? 'system default' : value} mode`);
+    } else if (key === 'language') {
+      toast.success(`Language changed to ${getLanguageName(value)}`);
+    } else if (key === 'currency') {
+      toast.success(`Currency changed to ${value}`);
+    }
+  };
+
+  const getLanguageName = (code) => {
+    const languages = {
+      'en': 'English',
+      'es': 'Spanish', 
+      'fr': 'French',
+      'de': 'German',
+      'ur': 'Urdu',
+      'ar': 'Arabic'
+    };
+    return languages[code] || code;
   };
 
   const handleSaveSettings = async () => {
@@ -74,12 +129,119 @@ const SettingsPage = () => {
     }
   };
 
-  const handleEnableTwoFactor = () => {
-    toast.info('Two-factor authentication setup will be available soon!');
+  const handleResetSettings = () => {
+    const defaultSettings = {
+      emailNotifications: true,
+      pushNotifications: false,
+      weeklyReports: true,
+      taxReminders: true,
+      expenseAlerts: false,
+      dataSharing: false,
+      analytics: true,
+      profileVisibility: 'private',
+      twoFactorAuth: false,
+      sessionTimeout: '30',
+      loginAlerts: true,
+      theme: 'light',
+      language: 'en',
+      timezone: 'America/New_York',
+      currency: 'USD',
+      dateFormat: 'MM/dd/yyyy'
+    };
+    
+    setSettings(defaultSettings);
+    localStorage.removeItem('userSettings');
+    localStorage.setItem('theme', 'light');
+    
+    // Apply light theme immediately
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add('light');
+    
+    toast.success('Settings reset to defaults');
   };
 
-  const handleExportData = () => {
-    toast.info('Data export feature will be available soon!');
+  const handleEnableTwoFactor = () => {
+    toast('Two-factor authentication setup will be available soon!', {
+      icon: 'ℹ️',
+      duration: 3000,
+    });
+  };
+
+  const handleExportData = async () => {
+    try {
+      // Show loading toast
+      const loadingToast = toast.loading('Preparing your data export...');
+      
+      // Simulate data preparation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+      
+      // Create sample data
+      const userData = {
+        profile: {
+          name: user?.full_name || 'Unknown User',
+          email: user?.email || 'No email',
+          created_at: new Date().toISOString(),
+        },
+        settings: settings,
+        export_date: new Date().toISOString(),
+        note: 'This is a sample export. Full functionality will be available soon.'
+      };
+      
+      // Create and download file
+      const dataStr = JSON.stringify(userData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `cpa-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Data exported successfully!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export data');
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      const loadingToast = toast.loading('Creating backup...');
+      
+      // Simulate backup creation
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      toast.dismiss(loadingToast);
+      
+      // Create backup data
+      const backupData = {
+        settings: settings,
+        backup_date: new Date().toISOString(),
+        version: '1.0.0'
+      };
+      
+      // Download backup file
+      const dataStr = JSON.stringify(backupData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `settings-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Settings backup created successfully!');
+    } catch (error) {
+      console.error('Backup error:', error);
+      toast.error('Failed to create backup');
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -87,7 +249,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       <Header />
       <Sidebar />
       
@@ -95,8 +257,8 @@ const SettingsPage = () => {
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Header */}
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-            <p className="text-gray-600">Manage your account preferences and security settings</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Account Settings</h1>
+            <p className="text-gray-600 dark:text-gray-400">Manage your account preferences and security settings</p>
           </div>
 
           {/* Notification Settings */}
@@ -403,7 +565,7 @@ const SettingsPage = () => {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => toast.info('Backup feature coming soon!')}
+                  onClick={handleCreateBackup}
                 >
                   <Save className="w-4 h-4 mr-2" />
                   Create Backup
@@ -442,9 +604,9 @@ const SettingsPage = () => {
           <div className="flex justify-end space-x-4">
             <Button
               variant="outline"
-              onClick={() => window.location.reload()}
+              onClick={handleResetSettings}
             >
-              Reset Changes
+              Reset to Defaults
             </Button>
             <Button
               onClick={handleSaveSettings}
