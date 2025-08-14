@@ -3,7 +3,7 @@ import { useChat } from '../../hooks/useChat';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
-import { Bot, Menu, X, Plus, MessageCircle } from 'lucide-react';
+import { Bot, Menu, X, Plus, MessageCircle, Trash2, Clock } from 'lucide-react';
 
 const ChatInterface = () => {
   const { 
@@ -12,33 +12,22 @@ const ChatInterface = () => {
     sendMessage, 
     startNewChat, 
     suggestions,
-    loading 
+    loading,
+    chatHistory,
+    loadChatHistory,
+    loadChat,
+    deleteChat,
+    currentChatId
   } = useChat();
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('new'); // 'new', 'history', 'chat'
   const messagesEndRef = useRef(null);
 
-  // Mock recent chats data - replace with real data from your chat service
-  const [recentChats] = useState([
-    {
-      id: '1',
-      title: 'Tax deduction questions',
-      lastMessage: 'What are my biggest tax deductions this year?',
-      timestamp: '2 hours ago'
-    },
-    {
-      id: '2', 
-      title: 'Expense categorization help',
-      lastMessage: 'Help me categorize my business expenses',
-      timestamp: '1 day ago'
-    },
-    {
-      id: '3',
-      title: 'Quarterly tax planning',
-      lastMessage: 'Calculate my estimated quarterly taxes',
-      timestamp: '3 days ago'
-    }
-  ]);
+  // Load chat history when component mounts
+  useEffect(() => {
+    loadChatHistory();
+  }, [loadChatHistory]);
 
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
@@ -48,6 +37,8 @@ const ChatInterface = () => {
   const handleSendMessage = async (message, attachments = []) => {
     try {
       await sendMessage(message, attachments);
+      // Switch to chat view after sending
+      setViewMode('chat');
     } catch (error) {
       console.error('Failed to send message:', error);
     }
@@ -59,21 +50,55 @@ const ChatInterface = () => {
 
   const handleNewChat = () => {
     startNewChat();
+    setViewMode('new');
     setSidebarOpen(false);
   };
 
-  const handleRecentChatClick = (chat) => {
-    // TODO: Load the specific chat conversation
-    // For now, we'll start a new chat with the last message as a prompt
-    console.log('Loading chat:', chat);
-    
-    // Option 1: Start new chat with the last message
-    handleSendMessage(chat.lastMessage);
-    
-    // Option 2: If you have a loadChat function in useChat hook:
-    // loadChat(chat.id);
-    
+  const handleRecentChatClick = async (chat) => {
+    try {
+      // Load the specific chat conversation
+      await loadChat(chat.id);
+      setViewMode('chat');
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Failed to load chat:', error);
+    }
+  };
+
+  const handleViewHistory = () => {
+    setViewMode('history');
     setSidebarOpen(false);
+  };
+
+  const handleBackToChat = () => {
+    if (messages.length > 0) {
+      setViewMode('chat');
+    } else {
+      setViewMode('new');
+    }
+  };
+
+  const handleDeleteChat = async (chatId, e) => {
+    e.stopPropagation(); // Prevent chat from being opened
+    if (window.confirm('Are you sure you want to delete this chat?')) {
+      try {
+        await deleteChat(chatId);
+      } catch (error) {
+        console.error('Failed to delete chat:', error);
+      }
+    }
+  };
+
+  const formatChatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return 'Today';
+    if (diffDays === 2) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -106,6 +131,13 @@ const ChatInterface = () => {
               <Plus className="w-4 h-4 text-gray-600" />
             </button>
             <button
+              onClick={handleViewHistory}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Chat History"
+            >
+              <Clock className="w-4 h-4 text-gray-600" />
+            </button>
+            <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
@@ -114,50 +146,130 @@ const ChatInterface = () => {
           </div>
         </div>
 
-        {/* Quick Suggestions */}
-        <div className="p-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Questions</h3>
-          <div className="space-y-2">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="w-full p-3 text-left text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Chats - Now Clickable */}
-        <div className="p-4 border-t border-gray-200">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Recent Chats</h3>
-          <div className="space-y-2">
-            {recentChats.map((chat) => (
-              <button
-                key={chat.id}
-                onClick={() => handleRecentChatClick(chat)}
-                className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
-              >
-                <div className="flex items-start space-x-2">
-                  <MessageCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {chat.title}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate mt-1">
-                      {chat.lastMessage}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {chat.timestamp}
-                    </div>
-                  </div>
+        {/* Content based on view mode */}
+        {viewMode === 'history' ? (
+          /* Chat History View */
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-700">Chat History</h3>
+                <button
+                  onClick={handleBackToChat}
+                  className="text-xs text-primary-600 hover:text-primary-700"
+                >
+                  Back to Chat
+                </button>
+              </div>
+              
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">Loading history...</p>
                 </div>
-              </button>
-            ))}
+              ) : chatHistory.length > 0 ? (
+                <div className="space-y-2">
+                  {chatHistory.map((chat) => (
+                    <div
+                      key={chat.id}
+                      className="group p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      onClick={() => handleRecentChatClick(chat)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <MessageCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium text-gray-900 truncate">
+                                {chat.title || chat.firstMessage || 'Untitled Chat'}
+                              </h4>
+                              <p className="text-xs text-gray-500 truncate mt-1">
+                                {chat.lastMessage || 'No messages'}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {formatChatDate(chat.updatedAt || chat.createdAt)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteChat(chat.id, e)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 transition-all"
+                          title="Delete chat"
+                        >
+                          <Trash2 className="w-3 h-3 text-red-500" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <MessageCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No chat history yet</p>
+                  <p className="text-xs text-gray-400">Start a conversation to see it here</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          /* Normal Sidebar Content */
+          <>
+            {/* Quick Suggestions */}
+            <div className="p-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Questions</h3>
+              <div className="space-y-2">
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="w-full p-3 text-left text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Chats - Show recent 3 */}
+            {chatHistory.length > 0 && (
+              <div className="p-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-700">Recent Chats</h3>
+                  <button
+                    onClick={handleViewHistory}
+                    className="text-xs text-primary-600 hover:text-primary-700"
+                  >
+                    View All
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {chatHistory.slice(0, 3).map((chat) => (
+                    <button
+                      key={chat.id}
+                      onClick={() => handleRecentChatClick(chat)}
+                      className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+                    >
+                      <div className="flex items-start space-x-2">
+                        <MessageCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {chat.title || chat.firstMessage || 'Untitled Chat'}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate mt-1">
+                            {chat.lastMessage || 'No messages'}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {formatChatDate(chat.updatedAt || chat.createdAt)}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Main Chat Area */}

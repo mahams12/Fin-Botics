@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, User, ThumbsUp, ThumbsDown, Copy, Share } from 'lucide-react';
+import { Bot, User, ThumbsUp, ThumbsDown, Copy, Share, File, Image, Mic } from 'lucide-react';
 import { formatTime } from '../../utils/dateUtils';
 
 const ChatBubble = ({ message, isLast = false }) => {
@@ -14,6 +14,33 @@ const ChatBubble = ({ message, isLast = false }) => {
     // Implement message rating logic
     console.log('Rating message:', message.id, rating);
   };
+
+  const getFileIcon = (attachment) => {
+    if (attachment.isVoice) {
+      return <Mic className="w-4 h-4" />;
+    }
+    if (attachment.type?.startsWith('image/')) {
+      return <Image className="w-4 h-4" />;
+    }
+    return <File className="w-4 h-4" />;
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Check if message has content (text or attachments)
+  const hasText = message.text && message.text.trim() !== '';
+  const hasAttachments = message.attachments && message.attachments.length > 0;
+  
+  // Don't render if no content
+  if (!hasText && !hasAttachments) {
+    return null;
+  }
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}>
@@ -43,23 +70,54 @@ const ChatBubble = ({ message, isLast = false }) => {
               }
             `}
           >
-            <p className="whitespace-pre-wrap">{message.text}</p>
+            {/* Text Content - Only show if there's text */}
+            {hasText && (
+              <p className="whitespace-pre-wrap">{message.text}</p>
+            )}
             
             {/* Attachments */}
-            {message.attachments && message.attachments.length > 0 && (
-              <div className="mt-2 space-y-2">
+            {hasAttachments && (
+              <div className={`space-y-2 ${hasText ? 'mt-2' : ''}`}>
                 {message.attachments.map((attachment, index) => (
                   <div 
                     key={index}
                     className={`
-                      p-2 rounded-lg border
-                      ${isUser ? 'bg-primary-500 border-primary-400' : 'bg-gray-50 border-gray-200'}
+                      flex items-center space-x-2 p-2 rounded-lg border
+                      ${isUser 
+                        ? 'bg-primary-500 border-primary-400 text-primary-100' 
+                        : 'bg-gray-50 border-gray-200 text-gray-700'
+                      }
                     `}
                   >
-                    <p className="text-xs">{attachment.name}</p>
+                    {/* File Icon */}
+                    <div className={`flex-shrink-0 ${isUser ? 'text-primary-100' : 'text-gray-500'}`}>
+                      {getFileIcon(attachment)}
+                    </div>
+                    
+                    {/* File Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium truncate ${isUser ? 'text-primary-100' : 'text-gray-700'}`}>
+                        {attachment.isVoice ? '🎤 Voice Message' : attachment.name}
+                      </p>
+                      {attachment.size && (
+                        <p className={`text-xs ${isUser ? 'text-primary-200' : 'text-gray-500'}`}>
+                          {formatFileSize(attachment.size)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* Show placeholder text for file-only messages */}
+            {!hasText && hasAttachments && (
+              <p className={`text-xs italic ${isUser ? 'text-primary-200' : 'text-gray-500'}`}>
+                {message.attachments.some(att => att.isVoice) 
+                  ? 'Sent a voice message' 
+                  : `Sent ${message.attachments.length} file${message.attachments.length > 1 ? 's' : ''}`
+                }
+              </p>
             )}
           </div>
 

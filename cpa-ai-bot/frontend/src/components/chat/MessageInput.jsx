@@ -5,11 +5,14 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // FIXED: Allow sending even if only attachments exist (no text required)
     if (message.trim() || attachments.length > 0) {
       onSendMessage(message.trim(), attachments);
       setMessage('');
@@ -58,15 +61,55 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
     setAttachments(prev => prev.filter(att => att.id !== attachmentId));
   };
 
-  const handleVoiceRecording = () => {
+  // FIXED: Implement proper voice recording functionality
+  const handleVoiceRecording = async () => {
     if (isRecording) {
       // Stop recording
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
       setIsRecording(false);
-      // Implement stop recording logic
     } else {
       // Start recording
-      setIsRecording(true);
-      // Implement start recording logic
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            setAudioChunks(prev => [...prev, event.data]);
+          }
+        };
+        
+        recorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+          const audioFile = new File([audioBlob], `voice_${Date.now()}.wav`, { type: 'audio/wav' });
+          
+          // Add voice recording as attachment
+          const voiceAttachment = {
+            file: audioFile,
+            name: audioFile.name,
+            size: audioFile.size,
+            type: audioFile.type,
+            id: Date.now() + Math.random(),
+            isVoice: true
+          };
+          
+          setAttachments(prev => [...prev, voiceAttachment]);
+          setAudioChunks([]);
+          
+          // Stop all tracks to release microphone
+          stream.getTracks().forEach(track => track.stop());
+        };
+        
+        setMediaRecorder(recorder);
+        recorder.start();
+        setIsRecording(true);
+        
+      } catch (error) {
+        console.error('Error accessing microphone:', error);
+        alert('Could not access microphone. Please check your browser permissions.');
+      }
     }
   };
 
@@ -86,11 +129,13 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
           {attachments.map((attachment) => (
             <div
               key={attachment.id}
-              className="flex items-center space-x-2 bg-gray-100 rounded-lg p-2"
+              className={`flex items-center space-x-2 rounded-lg p-2 ${
+                attachment.isVoice ? 'bg-blue-100' : 'bg-gray-100'
+              }`}
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {attachment.name}
+                  {attachment.isVoice ? '🎤 ' : ''}{attachment.name}
                 </p>
                 <p className="text-xs text-gray-500">
                   {formatFileSize(attachment.size)}
@@ -160,7 +205,7 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
             disabled={disabled}
             className={`p-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors disabled:opacity-50 ${
               isRecording 
-                ? 'bg-red-500 border-red-500 text-white' 
+                ? 'bg-red-500 border-red-500 text-white animate-pulse' 
                 : 'border-gray-300 hover:bg-gray-50 text-gray-600'
             }`}
             title={isRecording ? 'Stop recording' : 'Voice message'}
@@ -169,11 +214,11 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
           </button>
         </div>
 
-        {/* Send Button */}
+        {/* Send Button - FIXED: Now allows sending with only attachments */}
         <div className="flex-shrink-0">
           <button
             type="submit"
-            disabled={disabled || (!message.trim() && attachments.length === 0)}
+            disabled={disabled || (message.trim() === '' && attachments.length === 0)}
             className="btn btn-primary p-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Send message"
           >
@@ -181,6 +226,14 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
           </button>
         </div>
       </form>
+
+      {/* Recording Status */}
+      {isRecording && (
+        <div className="flex items-center space-x-2 text-red-600 text-sm">
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+          <span>Recording voice message...</span>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2">

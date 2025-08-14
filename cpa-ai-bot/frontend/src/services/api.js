@@ -21,9 +21,16 @@ api.interceptors.request.use(
       // Add session ID as multiple headers/params for compatibility
       config.headers['X-Session-ID'] = sessionId;
       config.headers['Authorization'] = `Bearer ${sessionId}`;
-      // Also add as query parameter for endpoints that expect it
-      config.params = config.params || {};
-      config.params.session_id = sessionId;
+      
+      // FIXED: Don't add session_id as query param for chat session DELETE requests
+      const isDeleteChatSession = config.method?.toLowerCase() === 'delete' && 
+                                  config.url?.includes('/chat/sessions/');
+      
+      if (!isDeleteChatSession) {
+        // Only add as query parameter for endpoints that expect it (not delete chat sessions)
+        config.params = config.params || {};
+        config.params.session_id = sessionId;
+      }
     } else if (token) {
       // Fallback to Bearer token if session_id not found
       config.headers.Authorization = `Bearer ${token}`;

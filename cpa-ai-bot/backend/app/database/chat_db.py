@@ -72,3 +72,17 @@ class ChatDatabase(BaseDatabase):
         if result.modified_count > 0:
             return await self.get_session_by_id(session_id)
         return None
+
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a chat session and all its messages"""
+        try:
+            # First delete all messages for this session
+            await self.messages.delete_many({"session_id": session_id})
+            
+            # Then delete the session itself
+            result = await self.collection.delete_one({"session_id": session_id})
+            
+            return result.deleted_count > 0
+        except Exception as e:
+            print(f"Error deleting session {session_id}: {e}")
+            return False

@@ -173,9 +173,10 @@ export const ChatProvider = ({ children }) => {
     return false; // Not an auth error
   }, [logout]);
 
-  // Send message function
+  // Send message function - FIXED for backend API
   const sendMessage = useCallback(async (messageText, attachments = []) => {
-    if (!messageText.trim()) return;
+    // FIXED: Allow sending if there's text OR attachments
+    if (!messageText.trim() && (!attachments || attachments.length === 0)) return;
 
     try {
       // Add user message immediately
@@ -191,53 +192,33 @@ export const ChatProvider = ({ children }) => {
       dispatch({ type: CHAT_ACTIONS.SET_TYPING, payload: true });
       dispatch({ type: CHAT_ACTIONS.CLEAR_ERROR });
 
-      // Send to API
+      // Send to backend API
       const response = await chatService.sendMessage({
         message: messageText,
-        chatId: state.currentChatId,
-        attachments,
+        chatId: state.currentChatId, // This will be session_id for backend
+        attachments, // Backend doesn't support this yet
       });
 
-      // DEBUG: Log the entire response to see its structure
-      console.log('🔍 Full API response:', response);
-      console.log('🔍 Response keys:', Object.keys(response));
-      console.log('🔍 Response.message:', response.message);
-      console.log('🔍 Response.response:', response.response);
-      console.log('🔍 Response.content:', response.content);
-      console.log('🔍 Response.text:', response.text);
-      console.log('🔍 Response.ai_response:', response.ai_response);
-      console.log('🔍 Response.data:', response.data);
+      console.log('✅ Backend response:', response);
 
-      // Try different possible field names for the AI message
-      const aiMessageText = response.message || 
-                            response.response || 
-                            response.content || 
-                            response.text || 
-                            response.ai_response ||
-                            response.data?.message ||
-                            response.data?.response ||
-                            response.data?.content ||
-                            'No response received from AI';
-
-      console.log('🤖 AI message text extracted:', aiMessageText);
-
-      // Add bot response
+      // Add bot response - backend returns different format
       const botMessage = {
-        id: response.messageId || response.id || response.data?.id || (Date.now() + 1).toString(),
-        text: aiMessageText,
+        id: (Date.now() + 1).toString(),
+        text: response.response, // Backend returns 'response' field
         sender: 'bot',
-        timestamp: response.timestamp || response.data?.timestamp || new Date().toISOString(),
-        suggestions: response.suggestions || response.data?.suggestions || [],
+        timestamp: new Date().toISOString(),
+        suggestions: [], // Backend doesn't return suggestions yet
       };
-
-      console.log('🤖 Bot message to add:', botMessage);
 
       dispatch({ type: CHAT_ACTIONS.ADD_MESSAGE, payload: botMessage });
 
       // Update current chat ID if it's a new chat
-      if (response.chatId && !state.currentChatId) {
-        dispatch({ type: CHAT_ACTIONS.SET_CURRENT_CHAT, payload: response.chatId });
+      if (response.session_id && !state.currentChatId) {
+        dispatch({ type: CHAT_ACTIONS.SET_CURRENT_CHAT, payload: response.session_id });
       }
+
+      // Reload chat history to get updated list
+      loadChatHistory();
 
       console.log('✅ Message sent successfully');
 
@@ -258,14 +239,67 @@ export const ChatProvider = ({ children }) => {
     }
   }, [state.currentChatId, handleAuthError]);
 
-  // Load chat history
+  // Load chat history - IMPROVED with better debugging and data handling
   const loadChatHistory = useCallback(async () => {
     try {
       dispatch({ type: CHAT_ACTIONS.SET_LOADING, payload: true });
-      const history = await chatService.getChatHistory();
-      dispatch({ type: CHAT_ACTIONS.SET_CHAT_HISTORY, payload: history });
+      const sessions = await chatService.getChatHistory();
+      
+      console.log('🔍 Raw backend response:', sessions);
+      console.log('🔍 Response type:', typeof sessions);
+      console.log('🔍 Is array:', Array.isArray(sessions));
+      
+      // Handle different response formats
+      let sessionsArray = sessions;
+      if (sessions && sessions.data) {
+        sessionsArray = sessions.data;
+      } else if (!Array.isArray(sessions)) {
+        console.warn('⚠️ Unexpected response format:', sessions);
+        sessionsArray = [];
+      }
+      
+      console.log('📋 Sessions array:', sessionsArray);
+      
+      // Transform backend format to frontend format with better handling
+      const formattedHistory = sessionsArray.map((session, index) => {
+        console.log(`🔍 Processing session ${index}:`, session);
+        
+        // Extract session ID - try different field names
+        const sessionId = session.session_id || session.id || session._id || `session_${index}`;
+        
+        // Extract title with fallback
+        let title = session.title || 'Untitled Chat';
+        if (title === 'New Chat' && session.created_at) {
+          // Create more descriptive title from date
+          const date = new Date(session.created_at);
+          title = `Chat ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        }
+        
+        // Extract dates with proper handling
+        const createdAt = session.created_at || new Date().toISOString();
+        const updatedAt = session.updated_at || session.created_at || new Date().toISOString();
+        
+        return {
+          id: sessionId,
+          title: title,
+          firstMessage: session.first_message || title,
+          lastMessage: session.last_message || title,
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+          messageCount: session.message_count || 0
+        };
+      });
+      
+      console.log('✅ Formatted history:', formattedHistory);
+      
+      // Sort by updated date (newest first)
+      formattedHistory.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      
+      dispatch({ type: CHAT_ACTIONS.SET_CHAT_HISTORY, payload: formattedHistory });
+      
     } catch (error) {
-      console.error('Load chat history error:', error);
+      console.error('❌ Load chat history error:', error);
+      console.error('❌ Error details:', error.response?.data);
       
       // Check if it's an authentication error
       if (handleAuthError(error)) {
@@ -279,15 +313,27 @@ export const ChatProvider = ({ children }) => {
     }
   }, [handleAuthError]);
 
-  // Load specific chat
+  // Load specific chat - FIXED for backend API
   const loadChat = useCallback(async (chatId) => {
     try {
       dispatch({ type: CHAT_ACTIONS.SET_LOADING, payload: true });
       const chatData = await chatService.getChat(chatId);
-      dispatch({ type: CHAT_ACTIONS.SET_MESSAGES, payload: chatData.messages });
+      
+      console.log('✅ Chat data loaded:', chatData);
+      
+      // Transform backend message format to frontend format
+      const formattedMessages = chatData.messages.map(msg => ({
+        id: msg.id,
+        text: msg.content, // Backend uses 'content', frontend expects 'text'
+        sender: msg.is_user ? 'user' : 'bot', // Backend uses is_user boolean
+        timestamp: msg.timestamp,
+        attachments: [] // Backend doesn't support attachments yet
+      }));
+      
+      dispatch({ type: CHAT_ACTIONS.SET_MESSAGES, payload: formattedMessages });
       dispatch({ type: CHAT_ACTIONS.SET_CURRENT_CHAT, payload: chatId });
     } catch (error) {
-      console.error('Load chat error:', error);
+      console.error('❌ Load chat error:', error);
       
       // Check if it's an authentication error
       if (handleAuthError(error)) {
@@ -308,10 +354,14 @@ export const ChatProvider = ({ children }) => {
     dispatch({ type: CHAT_ACTIONS.CLEAR_ERROR });
   }, []);
 
-  // Delete chat
+  // Delete chat - IMPROVED with better error handling
   const deleteChat = useCallback(async (chatId) => {
     try {
-      await chatService.deleteChat(chatId);
+      console.log('🗑️ Attempting to delete chat:', chatId);
+      
+      const response = await chatService.deleteChat(chatId);
+      console.log('✅ Delete response:', response);
+      
       dispatch({ type: CHAT_ACTIONS.REMOVE_FROM_HISTORY, payload: chatId });
       
       // If deleting current chat, clear messages
@@ -320,8 +370,13 @@ export const ChatProvider = ({ children }) => {
       }
       
       toast.success('Chat deleted successfully');
+      
+      // Reload chat history to get fresh data
+      await loadChatHistory();
+      
     } catch (error) {
-      console.error('Delete chat error:', error);
+      console.error('❌ Delete chat error:', error);
+      console.error('❌ Delete error details:', error.response?.data);
       
       // Check if it's an authentication error
       if (handleAuthError(error)) {
@@ -329,9 +384,16 @@ export const ChatProvider = ({ children }) => {
       }
 
       const errorMessage = getErrorMessage(error);
-      toast.error(errorMessage);
+      console.error('❌ Delete error message:', errorMessage);
+      
+      // Show more specific error messages
+      if (error.response?.status === 404) {
+        toast.error('Chat not found - it may have already been deleted');
+      } else {
+        toast.error(`Failed to delete chat: ${errorMessage}`);
+      }
     }
-  }, [state.currentChatId, handleAuthError]);
+  }, [state.currentChatId, handleAuthError, loadChatHistory]);
 
   // Clear error
   const clearError = useCallback(() => {
