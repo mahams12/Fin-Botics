@@ -3,7 +3,7 @@ import { useChat } from '../../hooks/useChat';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
-import { Bot, Menu, X, Plus } from 'lucide-react';
+import { Bot, Menu, X, Plus, MessageCircle } from 'lucide-react';
 
 const ChatInterface = () => {
   const { 
@@ -17,6 +17,28 @@ const ChatInterface = () => {
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Mock recent chats data - replace with real data from your chat service
+  const [recentChats] = useState([
+    {
+      id: '1',
+      title: 'Tax deduction questions',
+      lastMessage: 'What are my biggest tax deductions this year?',
+      timestamp: '2 hours ago'
+    },
+    {
+      id: '2', 
+      title: 'Expense categorization help',
+      lastMessage: 'Help me categorize my business expenses',
+      timestamp: '1 day ago'
+    },
+    {
+      id: '3',
+      title: 'Quarterly tax planning',
+      lastMessage: 'Calculate my estimated quarterly taxes',
+      timestamp: '3 days ago'
+    }
+  ]);
 
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
@@ -37,6 +59,20 @@ const ChatInterface = () => {
 
   const handleNewChat = () => {
     startNewChat();
+    setSidebarOpen(false);
+  };
+
+  const handleRecentChatClick = (chat) => {
+    // TODO: Load the specific chat conversation
+    // For now, we'll start a new chat with the last message as a prompt
+    console.log('Loading chat:', chat);
+    
+    // Option 1: Start new chat with the last message
+    handleSendMessage(chat.lastMessage);
+    
+    // Option 2: If you have a loadChat function in useChat hook:
+    // loadChat(chat.id);
+    
     setSidebarOpen(false);
   };
 
@@ -94,19 +130,32 @@ const ChatInterface = () => {
           </div>
         </div>
 
-        {/* Recent Chats - Placeholder */}
+        {/* Recent Chats - Now Clickable */}
         <div className="p-4 border-t border-gray-200">
           <h3 className="text-sm font-medium text-gray-700 mb-3">Recent Chats</h3>
           <div className="space-y-2">
-            <div className="p-2 text-sm text-gray-500 bg-gray-50 rounded-lg">
-              Tax deduction questions
-            </div>
-            <div className="p-2 text-sm text-gray-500 bg-gray-50 rounded-lg">
-              Expense categorization help
-            </div>
-            <div className="p-2 text-sm text-gray-500 bg-gray-50 rounded-lg">
-              Quarterly tax planning
-            </div>
+            {recentChats.map((chat) => (
+              <button
+                key={chat.id}
+                onClick={() => handleRecentChatClick(chat)}
+                className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+              >
+                <div className="flex items-start space-x-2">
+                  <MessageCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">
+                      {chat.title}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate mt-1">
+                      {chat.lastMessage}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {chat.timestamp}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </div>
