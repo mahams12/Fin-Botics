@@ -101,7 +101,7 @@ const DashboardPage = () => {
       <div className="flex">
         <Sidebar />
         
-        <main className="flex-1 ml-64 p-8">
+        <main className="flex-1 ml-64 p-8 pt-20">
           {/* Welcome Section */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">

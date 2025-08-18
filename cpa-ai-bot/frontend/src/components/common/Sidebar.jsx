@@ -87,7 +87,7 @@ const Sidebar = () => {
       {/* Sidebar */}
       <aside className={`
         fixed top-0 left-0 z-50 h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out
-        ${sidebarCollapsed ? '-translate-x-full lg:translate-x-0 lg:w-16' : 'w-64'}
+        ${sidebarCollapsed ? '-translate-x-full lg:translate-x-0 lg:w-20' : 'w-64'}
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}
@@ -135,7 +135,7 @@ const Sidebar = () => {
                     `}
                     title={sidebarCollapsed ? item.name : ''}
                   >
-                    <Icon className={`w-5 h-5 ${active ? 'text-primary-600' : ''}`} />
+                    <Icon className={`${sidebarCollapsed ? 'w-8 h-8' : 'w-5 h-5'} ${active ? 'text-primary-600' : ''}`} />
                     {!sidebarCollapsed && (
                       <>
                         <span className="flex-1">{item.name}</span>
@@ -197,7 +197,7 @@ const Sidebar = () => {
               `}
               title={sidebarCollapsed ? 'Settings' : ''}
             >
-              <Settings className="w-5 h-5" />
+              <Settings className={`${sidebarCollapsed ? 'w-8 h-8' : 'w-5 h-5'}`} />
               {!sidebarCollapsed && <span>Settings</span>}
               
               {/* Tooltip for collapsed sidebar */}
@@ -213,7 +213,7 @@ const Sidebar = () => {
       </aside>
 
       {/* Main content spacer */}
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`} />
+      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`} />
     </>
   );
 };
