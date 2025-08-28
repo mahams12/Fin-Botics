@@ -13,8 +13,10 @@ import toast from 'react-hot-toast';
 
 const ReportDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [dateRange, setDateRange] = useState('this_year');
-  const [reportType, setReportType] = useState('financial_summary');
+  // Removed dateRange and reportType state variables since filters are removed
+  // Set default values for any functions that still need them
+  const dateRange = 'this_year'; // Default to this year
+  const reportType = 'financial_summary'; // Default to financial summary
   const [isExporting, setIsExporting] = useState(false);
   const [isGenerating, setIsGenerating] = useState({});
 
@@ -228,29 +230,7 @@ const ReportDashboard = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <select
-            value={reportType}
-            onChange={(e) => setReportType(e.target.value)}
-            className="form-select"
-          >
-            <option value="financial_summary">Financial Summary</option>
-            <option value="profit_loss">Profit & Loss</option>
-            <option value="expense_analysis">Expense Analysis</option>
-            <option value="cash_flow">Cash Flow</option>
-          </select>
-          
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="form-select"
-          >
-            {DATE_RANGES.map(range => (
-              <option key={range.value} value={range.value}>
-                {range.label}
-              </option>
-            ))}
-          </select>
-          
+          {/* Removed the two dropdown filters */}
           <div className="relative">
             <Button 
               variant="outline" 

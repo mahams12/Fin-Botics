@@ -1,10 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { Calculator, DollarSign, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Calculator, DollarSign, FileText, AlertCircle, CheckCircle, ChevronDown } from 'lucide-react';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
-import { BUSINESS_TYPES, TAX_YEARS } from '../../utils/constants';
+import { BUSINESS_TYPES, TAX_YEARS, US_STATES } from '../../utils/constants';
+
+// Custom Dropdown Component with Scrollbar
+const CustomSelect = ({ value, onChange, options, placeholder = "Select an option", name }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const filteredOptions = options.filter(option =>
+    option.label.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const selectedOption = options.find(option => option.value === value);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange({ target: { name, value: option.value } });
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div
+        className="form-select flex items-center justify-between cursor-pointer"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className={selectedOption ? 'text-gray-900' : 'text-gray-400'}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+          {options.length > 10 && (
+            <div className="p-2 border-b border-gray-200">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
+          
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <div
+                  key={option.value}
+                  className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${
+                    value === option.value ? 'bg-blue-50 text-blue-600' : 'text-gray-900'
+                  }`}
+                  onClick={() => handleSelect(option)}
+                >
+                  {option.label}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-gray-500 text-sm">No options found</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const TaxEstimation = () => {
   const [formData, setFormData] = useState({
@@ -80,18 +163,61 @@ const TaxEstimation = () => {
   };
 
   const calculateStateRate = (income, state) => {
-    // Simplified state tax rates
+    // Enhanced state tax rates for all states
     const stateRates = {
-      'CA': 0.08,
-      'NY': 0.07,
-      'TX': 0.00,
-      'FL': 0.00,
-      'WA': 0.00,
-      'IL': 0.05,
-      'PA': 0.03,
-      'OH': 0.04,
+      'AL': 0.05, // Alabama
+      'AK': 0.00, // Alaska - No state income tax
+      'AZ': 0.025, // Arizona
+      'AR': 0.055, // Arkansas
+      'CA': 0.08, // California
+      'CO': 0.0463, // Colorado
+      'CT': 0.055, // Connecticut
+      'DE': 0.055, // Delaware
+      'DC': 0.06, // District of Columbia
+      'FL': 0.00, // Florida - No state income tax
+      'GA': 0.055, // Georgia
+      'HI': 0.08, // Hawaii
+      'ID': 0.06, // Idaho
+      'IL': 0.0495, // Illinois
+      'IN': 0.0323, // Indiana
+      'IA': 0.0853, // Iowa
+      'KS': 0.057, // Kansas
+      'KY': 0.05, // Kentucky
+      'LA': 0.06, // Louisiana
+      'ME': 0.0715, // Maine
+      'MD': 0.055, // Maryland
+      'MA': 0.05, // Massachusetts
+      'MI': 0.0425, // Michigan
+      'MN': 0.0985, // Minnesota
+      'MS': 0.05, // Mississippi
+      'MO': 0.054, // Missouri
+      'MT': 0.069, // Montana
+      'NE': 0.0684, // Nebraska
+      'NV': 0.00, // Nevada - No state income tax
+      'NH': 0.00, // New Hampshire - No state income tax on wages
+      'NJ': 0.0897, // New Jersey
+      'NM': 0.049, // New Mexico
+      'NY': 0.08, // New York
+      'NC': 0.055, // North Carolina
+      'ND': 0.0295, // North Dakota
+      'OH': 0.0399, // Ohio
+      'OK': 0.05, // Oklahoma
+      'OR': 0.099, // Oregon
+      'PA': 0.0307, // Pennsylvania
+      'RI': 0.0599, // Rhode Island
+      'SC': 0.07, // South Carolina
+      'SD': 0.00, // South Dakota - No state income tax
+      'TN': 0.00, // Tennessee - No state income tax on wages
+      'TX': 0.00, // Texas - No state income tax
+      'UT': 0.0495, // Utah
+      'VT': 0.0875, // Vermont
+      'VA': 0.055, // Virginia
+      'WA': 0.00, // Washington - No state income tax
+      'WV': 0.065, // West Virginia
+      'WI': 0.0765, // Wisconsin
+      'WY': 0.00, // Wyoming - No state income tax
     };
-    return stateRates[state] || 0.05;
+    return stateRates[state] || 0.05; // Default 5% if state not found
   };
 
   const filingStatuses = [
@@ -99,15 +225,6 @@ const TaxEstimation = () => {
     { value: 'married_filing_jointly', label: 'Married Filing Jointly' },
     { value: 'married_filing_separately', label: 'Married Filing Separately' },
     { value: 'head_of_household', label: 'Head of Household' },
-  ];
-
-  const states = [
-    { value: 'AL', label: 'Alabama' },
-    { value: 'CA', label: 'California' },
-    { value: 'FL', label: 'Florida' },
-    { value: 'NY', label: 'New York' },
-    { value: 'TX', label: 'Texas' },
-    // Add more states as needed
   ];
 
   return (
@@ -209,18 +326,13 @@ const TaxEstimation = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="form-label">State</label>
-                <select
+                <CustomSelect
                   name="state"
                   value={formData.state}
                   onChange={handleInputChange}
-                  className="form-select"
-                >
-                  {states.map(state => (
-                    <option key={state.value} value={state.value}>
-                      {state.label}
-                    </option>
-                  ))}
-                </select>
+                  options={US_STATES}
+                  placeholder="Select a state"
+                />
               </div>
 
               <Input
