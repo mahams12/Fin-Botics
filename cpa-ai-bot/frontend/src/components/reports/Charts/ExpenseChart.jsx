@@ -1,10 +1,23 @@
 import React, { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { formatCurrency, formatPercentage } from '../../../utils/formatters';
-import { CHART_COLORS } from '../../../utils/constants';
 
 const ExpenseChart = ({ dateRange = 'this_year' }) => {
   const [chartType, setChartType] = useState('pie'); // 'pie' or 'bar'
+
+  // Define colors directly in the component
+  const CHART_COLORS = [
+    '#3B82F6', // blue
+    '#10B981', // emerald
+    '#F59E0B', // amber
+    '#EF4444', // red
+    '#8B5CF6', // violet
+    '#06B6D4', // cyan
+    '#F97316', // orange
+    '#84CC16', // lime
+    '#EC4899', // pink
+    '#6B7280'  // gray
+  ];
 
   // Mock data - replace with actual API call based on dateRange
   const expenseData = [
@@ -90,7 +103,6 @@ const ExpenseChart = ({ dateRange = 'this_year' }) => {
           outerRadius={120}
           innerRadius={40}
           paddingAngle={2}
-          fill="#8884d8"
           dataKey="amount"
         >
           {expenseData.map((entry, index) => (

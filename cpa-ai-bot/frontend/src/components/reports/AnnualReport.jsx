@@ -1,85 +1,141 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Calendar, Download, TrendingUp, TrendingDown, Target, Award } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
-import { reportService } from '../../services/reportService'; // ADD THIS IMPORT
+import { reportService } from '../../services/reportService';
+import { useExpenses } from '../../hooks/useExpenses';
 
 const AnnualReport = () => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [isDownloading, setIsDownloading] = useState(false); // ADD THIS STATE
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Mock data - replace with actual API call
-  const annualData = {
-    totalExpenses: 156780.50,
-    totalIncome: 224850.00,
-    netProfit: 68069.50,
-    expenseGrowth: 0.18,
-    incomeGrowth: 0.23,
-    profitMargin: 0.303,
-    taxableIncome: 65420.00,
-    estimatedTaxes: 16355.00,
-    quarterlyData: [
-      { quarter: 'Q1', income: 52450.00, expenses: 38920.50, profit: 13529.50 },
-      { quarter: 'Q2', income: 58750.00, expenses: 41280.75, profit: 17469.25 },
-      { quarter: 'Q3', income: 56320.00, expenses: 39450.25, profit: 16869.75 },
-      { quarter: 'Q4', income: 57330.00, expenses: 37129.00, profit: 20201.00 },
-    ],
-    monthlyTrends: [
-      { month: 'Jan', income: 18200, expenses: 12450 },
-      { month: 'Feb', income: 16800, expenses: 13120 },
-      { month: 'Mar', income: 17450, expenses: 13350 },
-      { month: 'Apr', income: 19200, expenses: 13780 },
-      { month: 'May', income: 19800, expenses: 13850 },
-      { month: 'Jun', income: 19750, expenses: 13650 },
-      { month: 'Jul', income: 18900, expenses: 13200 },
-      { month: 'Aug', income: 18720, expenses: 13150 },
-      { month: 'Sep', income: 18700, expenses: 13100 },
-      { month: 'Oct', income: 19100, expenses: 12400 },
-      { month: 'Nov', income: 19150, expenses: 12350 },
-      { month: 'Dec', income: 19080, expenses: 12379 },
-    ],
-    categories: [
-      { name: 'Office & Administrative', amount: 18560.00, percentage: 0.118, growth: 0.15 },
-      { name: 'Travel & Transportation', amount: 24780.00, percentage: 0.158, growth: 0.22 },
-      { name: 'Meals & Entertainment', amount: 12450.00, percentage: 0.079, growth: -0.05 },
-      { name: 'Equipment & Technology', amount: 28920.00, percentage: 0.184, growth: 0.35 },
-      { name: 'Software & Subscriptions', amount: 15680.00, percentage: 0.100, growth: 0.18 },
-      { name: 'Marketing & Advertising', amount: 22150.00, percentage: 0.141, growth: 0.28 },
-      { name: 'Professional Services', amount: 19840.00, percentage: 0.127, growth: 0.12 },
-      { name: 'Other', amount: 14400.50, percentage: 0.092, growth: 0.08 },
-    ],
-    achievements: [
-      { title: 'Revenue Growth', value: '23%', description: 'Exceeded target of 20%' },
-      { title: 'Profit Margin', value: '30.3%', description: 'Above industry average' },
-      { title: 'Cost Efficiency', value: '8.5%', description: 'Reduced operational costs' },
-      { title: 'Tax Savings', value: '$4,250', description: 'Through optimization' },
-    ],
-  };
+  // Get all expenses (no filters to get full dataset)
+  const { expenses: allExpenses } = useExpenses({});
 
-  // REPLACE THE OLD handleDownload FUNCTION WITH THIS:
+  // Calculate annual data from real expenses
+  const annualData = useMemo(() => {
+    // Filter expenses for selected year
+    const yearExpenses = allExpenses.filter(expense => {
+      const expenseYear = new Date(expense.date).getFullYear();
+      return expenseYear === selectedYear;
+    });
+
+    console.log(`Calculating annual data for ${selectedYear}:`, yearExpenses.length, 'expenses');
+
+    // Calculate totals
+    const totalExpenses = yearExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
+    
+    // For income, we'll need to estimate or get from a separate source
+    // For now, assuming a profit margin to calculate estimated income
+    const estimatedIncome = totalExpenses * 1.43; // Assuming 30% profit margin
+    const netProfit = estimatedIncome - totalExpenses;
+    const profitMargin = estimatedIncome > 0 ? netProfit / estimatedIncome : 0;
+
+    // Calculate category breakdown
+    const categoryBreakdown = yearExpenses.reduce((acc, expense) => {
+      const category = expense.category || 'Other';
+      if (!acc[category]) {
+        acc[category] = { amount: 0, count: 0 };
+      }
+      acc[category].amount += parseFloat(expense.amount) || 0;
+      acc[category].count += 1;
+      return acc;
+    }, {});
+
+    const categories = Object.entries(categoryBreakdown).map(([name, data]) => ({
+      name,
+      amount: data.amount,
+      percentage: totalExpenses > 0 ? data.amount / totalExpenses : 0,
+      growth: 0.1 // We'd need historical data to calculate real growth
+    })).sort((a, b) => b.amount - a.amount);
+
+    // Calculate quarterly data
+    const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const quarterlyData = quarters.map((quarter, index) => {
+      const startMonth = index * 3;
+      const endMonth = startMonth + 2;
+      
+      const quarterExpenses = yearExpenses.filter(expense => {
+        const expenseMonth = new Date(expense.date).getMonth();
+        return expenseMonth >= startMonth && expenseMonth <= endMonth;
+      });
+      
+      const quarterTotalExpenses = quarterExpenses.reduce((sum, expense) => 
+        sum + (parseFloat(expense.amount) || 0), 0);
+      const quarterIncome = quarterTotalExpenses * 1.43; // Estimated based on profit margin
+      const quarterProfit = quarterIncome - quarterTotalExpenses;
+      
+      return {
+        quarter,
+        income: quarterIncome,
+        expenses: quarterTotalExpenses,
+        profit: quarterProfit
+      };
+    });
+
+    // Calculate tax estimation (simplified)
+    const taxableIncome = Math.max(0, netProfit);
+    const estimatedTaxes = taxableIncome * 0.25; // Simplified 25% tax rate
+
+    // Calculate some basic achievements
+    const achievements = [
+      { 
+        title: 'Total Expenses', 
+        value: formatCurrency(totalExpenses), 
+        description: `Tracked ${yearExpenses.length} transactions` 
+      },
+      { 
+        title: 'Profit Margin', 
+        value: formatPercentage(profitMargin), 
+        description: 'Estimated margin' 
+      },
+      { 
+        title: 'Categories Tracked', 
+        value: categories.length.toString(), 
+        description: 'Expense categories' 
+      },
+      { 
+        title: 'Avg Monthly', 
+        value: formatCurrency(totalExpenses / 12), 
+        description: 'Monthly expenses' 
+      },
+    ];
+
+    return {
+      totalExpenses,
+      totalIncome: estimatedIncome,
+      netProfit,
+      profitMargin,
+      taxableIncome,
+      estimatedTaxes,
+      quarterlyData,
+      categories,
+      achievements,
+      expenseCount: yearExpenses.length
+    };
+  }, [allExpenses, selectedYear]);
+
   const handleDownload = async () => {
     if (isDownloading) return;
     
     setIsDownloading(true);
     try {
-      console.log('🔧 Starting annual report download...');
+      console.log('Starting annual report download...');
       
-      // Create date range for the selected year
       const start_date = `${selectedYear}-01-01`;
       const end_date = `${selectedYear}-12-31`;
       
-      // Use the downloadReport method for annual reports
       await reportService.downloadReport('financial_summary', 'pdf', {
         start_date,
         end_date
       });
       
-      console.log('✅ Annual report download completed successfully');
+      console.log('Annual report download completed successfully');
       
     } catch (error) {
-      console.error('❌ Annual report download failed:', error);
+      console.error('Annual report download failed:', error);
       alert('Failed to download annual report. Please try again.');
     } finally {
       setIsDownloading(false);
@@ -94,7 +150,10 @@ const AnnualReport = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Annual Report</h2>
-          <p className="text-gray-600">Comprehensive year-end financial summary for {selectedYear}</p>
+          <p className="text-gray-600">
+            Comprehensive year-end financial summary for {selectedYear} 
+            ({annualData.expenseCount} transactions)
+          </p>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -110,7 +169,6 @@ const AnnualReport = () => {
             ))}
           </select>
           
-          {/* UPDATE THE BUTTON WITH LOADING STATE */}
           <Button 
             onClick={handleDownload} 
             variant="outline"
@@ -131,9 +189,7 @@ const AnnualReport = () => {
             </div>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(annualData.totalIncome)}</p>
             <p className="text-sm text-gray-600">Total Revenue</p>
-            <p className="text-xs text-green-600 mt-1">
-              +{formatPercentage(annualData.incomeGrowth)} YoY
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Estimated</p>
           </div>
           
           <div className="text-center">
@@ -142,9 +198,7 @@ const AnnualReport = () => {
             </div>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(annualData.totalExpenses)}</p>
             <p className="text-sm text-gray-600">Total Expenses</p>
-            <p className="text-xs text-red-600 mt-1">
-              +{formatPercentage(annualData.expenseGrowth)} YoY
-            </p>
+            <p className="text-xs text-green-600 mt-1">{annualData.expenseCount} transactions</p>
           </div>
           
           <div className="text-center">
@@ -165,7 +219,7 @@ const AnnualReport = () => {
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(annualData.estimatedTaxes)}</p>
             <p className="text-sm text-gray-600">Estimated Taxes</p>
             <p className="text-xs text-purple-600 mt-1">
-              {formatPercentage(annualData.estimatedTaxes / annualData.taxableIncome)} rate
+              {formatPercentage(annualData.taxableIncome > 0 ? annualData.estimatedTaxes / annualData.taxableIncome : 0)} rate
             </p>
           </div>
         </div>
@@ -211,36 +265,35 @@ const AnnualReport = () => {
 
       {/* Expense Analysis */}
       <Card title="Annual Expense Breakdown">
-        <div className="space-y-4">
-          {annualData.categories.map((category, index) => (
-            <div key={index} className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-900">{category.name}</span>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm text-gray-600">{formatCurrency(category.amount)}</span>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      category.growth >= 0 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {category.growth >= 0 ? '+' : ''}{formatPercentage(category.growth)}
-                    </span>
+        {annualData.categories.length > 0 ? (
+          <div className="space-y-4">
+            {annualData.categories.map((category, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-900">{category.name}</span>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm text-gray-600">{formatCurrency(category.amount)}</span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                        {formatPercentage(category.percentage)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-primary-600 h-2 rounded-full"
+                      style={{ width: `${category.percentage * 100}%` }}
+                    />
                   </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-primary-600 h-2 rounded-full"
-                    style={{ width: `${category.percentage * 100}%` }}
-                  />
-                </div>
               </div>
-              <span className="ml-4 text-sm text-gray-500 min-w-[3rem]">
-                {formatPercentage(category.percentage)}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No expenses found for {selectedYear}. Start adding expenses to see your breakdown.
+          </div>
+        )}
       </Card>
 
       {/* Tax Summary */}
@@ -250,7 +303,7 @@ const AnnualReport = () => {
             <h4 className="font-medium text-gray-900">Income Summary</h4>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Gross Income:</span>
+                <span className="text-sm text-gray-600">Estimated Income:</span>
                 <span className="text-sm font-medium">{formatCurrency(annualData.totalIncome)}</span>
               </div>
               <div className="flex justify-between">
@@ -314,20 +367,20 @@ const AnnualReport = () => {
           <div>
             <h4 className="font-medium text-gray-900 mb-3">Growth Opportunities</h4>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li>• Consider investing in marketing to maintain 23% growth rate</li>
-              <li>• Equipment category shows strong ROI - plan for expansion</li>
-              <li>• Q4 showed strongest performance - analyze seasonal factors</li>
-              <li>• Professional services investment yielded good returns</li>
+              <li>• Track income data to get accurate profit calculations</li>
+              <li>• {annualData.categories[0]?.name} is your largest expense category</li>
+              <li>• Consider setting up monthly budgets for better control</li>
+              <li>• Q4 typically shows different spending patterns - plan accordingly</li>
             </ul>
           </div>
           
           <div>
             <h4 className="font-medium text-gray-900 mb-3">Cost Optimization</h4>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li>• Review meal & entertainment expenses (-5% suggests over-cutting)</li>
-              <li>• Software subscriptions growing fast - audit for unused services</li>
-              <li>• Travel expenses up 22% - evaluate cost vs. business value</li>
-              <li>• Consider tax planning strategies to reduce effective rate</li>
+              <li>• Review high-expense categories for optimization opportunities</li>
+              <li>• Set up expense alerts for categories exceeding budgets</li>
+              <li>• Consider bulk purchasing for recurring expenses</li>
+              <li>• Use tax planning strategies throughout the year</li>
             </ul>
           </div>
         </div>
