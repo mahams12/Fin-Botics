@@ -148,7 +148,7 @@ const LoginPage = () => {
           <div className="text-center mb-8">
             <div className="flex items-center justify-center space-x-2 mb-4">
               <Bot className="w-8 h-8 text-primary-600" />
-              <span className="text-2xl font-bold text-gray-900">CPA AI Bot</span>
+              <span className="text-2xl font-bold text-gray-900">FinBotics</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900">
               {isSignUp ? 'Create Account' : 'Welcome Back'}

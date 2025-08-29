@@ -295,7 +295,7 @@ const ChatInterface = () => {
                   <Bot className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="font-semibold text-gray-900">CPA AI Assistant</h1>
+                  <h1 className="font-semibold text-gray-900">FinBotics Assistant</h1>
                   <p className="text-sm text-gray-500">
                     {isTyping ? 'Typing...' : 'Online'}
                   </p>
@@ -321,7 +321,7 @@ const ChatInterface = () => {
                 <Bot className="w-8 h-8 text-primary-600" />
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Welcome to CPA AI Assistant
+                Welcome to FnBotics Assistant
               </h2>
               <p className="text-gray-600 mb-6 max-w-md mx-auto">
                 I'm here to help with your tax questions, expense categorization, 

@@ -14,7 +14,7 @@ class Settings:
     OPENAI_API_KEY: str = config("OPENAI_API_KEY", default="")
     
     # App
-    APP_NAME: str = config("APP_NAME", default="CPA AI Bot")
+    APP_NAME: str = config("APP_NAME", default="FinBotics")
     DEBUG: bool = config("DEBUG", default=True, cast=bool)
     CORS_ORIGINS: List[str] = config("CORS_ORIGINS", default="http://localhost:3000").split(",")
 

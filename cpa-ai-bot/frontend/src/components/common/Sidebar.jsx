@@ -95,7 +95,7 @@ const Sidebar = () => {
             {!sidebarCollapsed && (
               <Link to="/dashboard" className="flex items-center space-x-2">
                 <Bot className="w-8 h-8 text-primary-600" />
-                <span className="text-xl font-bold text-gray-900">CPA AI Bot</span>
+                <span className="text-xl font-bold text-gray-900">FinBotics</span>
               </Link>
             )}
             

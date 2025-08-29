@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting up CPA AI Bot API...")
+    logger.info("Starting up FinBotics API...")
     try:
         await connect_to_mongo()
         logger.info("Database connected successfully")
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    logger.info("Shutting down CPA AI Bot API...")
+    logger.info("Shutting down FinBotics API...")
     try:
         await close_mongo_connection()
         logger.info("Database connection closed")
@@ -103,7 +103,7 @@ logger.info("All routers included successfully!")
 async def root():
     """Root endpoint"""
     return {
-        "message": "Welcome to CPA AI Bot API",
+        "message": "Welcome to FinBotics API",
         "version": "1.0.0",
         "docs": "/docs" if settings.DEBUG else "Documentation not available in production"
     }

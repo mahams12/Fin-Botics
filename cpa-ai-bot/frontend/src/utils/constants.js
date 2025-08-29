@@ -194,7 +194,7 @@ export const API_ENDPOINTS = {
 
 // App configuration
 export const APP_CONFIG = {
-  name: 'CPA AI Bot',
+  name: 'FinBotics',
   version: '1.0.0',
   description: 'AI-powered CPA assistant for small businesses',
 };

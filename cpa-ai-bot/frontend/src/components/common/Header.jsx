@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Bell, 
   Search, 
@@ -17,6 +17,7 @@ import toast from 'react-hot-toast';
 
 const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const { toggleSidebar } = useThemeContext();
   
@@ -181,6 +182,9 @@ const Header = () => {
     return user?.first_name?.charAt(0) || 'U';
   };
 
+  // Check if current page is chat interface
+  const isChatPage = location.pathname === '/chat';
+  
   // Profile Avatar Component
   const ProfileAvatar = ({ size = 'w-8 h-8', textSize = 'text-sm' }) => {
     const profileImage = getProfileImage();
@@ -226,22 +230,27 @@ const Header = () => {
             {/* Logo (mobile) */}
             <Link to="/dashboard" className="lg:hidden flex items-center space-x-2">
               <Bot className="w-6 h-6 text-primary-600" />
-              <span className="text-lg font-bold text-gray-900 dark:text-white">CPA AI Bot</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-white">FinBotics</span>
             </Link>
 
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="hidden md:block">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search expenses, reports, or ask AI..."
-                  className="w-96 pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                />
-                <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-              </div>
-            </form>
+            {/* Search Bar - CONDITIONAL POSITIONING */}
+            <div className={`hidden md:block ${!isChatPage 
+              ? 'absolute left-1/2 transform -translate-x-1/2 lg:left-72 lg:transform-none' 
+              : ''
+            }`}>
+              <form onSubmit={handleSearch}>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search expenses, reports, or ask AI..."
+                    className={`${!isChatPage ? 'w-80 lg:w-96' : 'w-96'} pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-700 dark:text-white`}
+                  />
+                  <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                </div>
+              </form>
+            </div>
           </div>
 
           {/* Right Side */}
